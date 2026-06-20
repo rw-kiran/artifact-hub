@@ -1,10 +1,11 @@
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { ShareModal } from '@/components/ShareModal'
+import { FeedbackPanel } from '@/components/FeedbackPanel'
 import { notFound } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import type { Artifact } from '@/lib/types'
+import type { Artifact, Feedback } from '@/lib/types'
 
 export default async function ArtifactDetailPage({
   params,
@@ -36,6 +37,14 @@ export default async function ArtifactDetailPage({
 
   const isOwner = user?.id === artifact.created_by
 
+  // ponytail: service role intentionally bypasses RLS — visitors should see feedback on public artifacts
+  const { data: feedbackData } = await supabase
+    .from('feedback')
+    .select('*')
+    .eq('artifact_id', id)
+    .order('created_at', { ascending: true })
+  const feedback = (feedbackData ?? []) as Feedback[]
+
   return (
     <main className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-6">
@@ -64,7 +73,11 @@ export default async function ArtifactDetailPage({
         {new Date(artifact.created_at).toLocaleDateString()}
       </p>
       <ArtifactViewer artifact={artifact} />
-      {/* Phase 3: FeedbackPanel */}
+      <FeedbackPanel
+        initialFeedback={feedback}
+        artifactId={artifact.id}
+        currentUser={user ? { email: user.email!, name: user.user_metadata?.full_name ?? null } : null}
+      />
     </main>
   )
 }
