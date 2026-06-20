@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { put } from '@vercel/blob'
 import { createServerSupabaseClient } from '@/lib/db/supabase'
 import { ALLOWED_MIME_TYPES, isAllowedMimeType } from '@/lib/validation'
+import { isPrivateUrl } from '@/lib/ssrf'
+import { isFkViolation, assertUuid } from '@/lib/mcp/utils'
 import type { ArtifactType } from '@/lib/types'
 
 export const mcpServer = new EdgeFastMCP({
@@ -18,17 +20,6 @@ function mimeToType(mime: string): ArtifactType | null {
   return null
 }
 
-// ponytail: fastmcp/edge doesn't run Zod validation on inputs — guard manually where it matters
-function assertUuid(val: unknown, name: string): asserts val is string {
-  if (typeof val !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
-    throw new Error(`Invalid ${name}: "${val}". Expected a UUID (e.g. from list_artifacts()).`)
-  }
-}
-
-function isFkViolation(msg: string) {
-  return msg.includes('foreign key') || msg.includes('violates')
-}
-
 mcpServer.addTool({
   name: 'publish_artifact',
   description: 'Publish a new artifact to the hub from a remote URL. Supports HTML, images (JPEG, PNG, GIF, WebP), and PDFs up to 50 MB.',
@@ -40,6 +31,10 @@ mcpServer.addTool({
     visibility: z.enum(['public', 'private']).default('public'),
   }),
   execute: async ({ url, title, description, tags, visibility }) => {
+    if (isPrivateUrl(url)) {
+      throw new Error(`Cannot publish from private or internal URLs. Provide a public URL.`)
+    }
+
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ArtifactHub/1.0)' },
     })
@@ -49,7 +44,8 @@ mcpServer.addTool({
     if (!isAllowedMimeType(contentType)) {
       throw new Error(`Unsupported file type "${contentType}". Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}`)
     }
-    const type = mimeToType(contentType)!
+    const type = mimeToType(contentType)
+    if (!type) throw new Error(`Internal: mimeToType returned null for allowed MIME "${contentType}"`)
 
     const filename = url.split('/').pop()?.split('?')[0] ?? 'artifact'
     const { url: blobUrl, pathname } = await put(filename, response.body!, {
@@ -275,7 +271,7 @@ mcpServer.addTool({
         content,
         rating: rating ?? null,
         author_name: author_name ?? 'MCP',
-        author_email: author_email ?? 'mcp@artifact-hub',
+        author_email: author_email ?? 'noreply@artifact-hub.app',
       })
       .select('id, created_at')
       .single()

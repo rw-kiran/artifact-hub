@@ -1,27 +1,37 @@
+import { timingSafeEqual } from 'node:crypto'
 import { mcpServer } from '@/lib/mcp/server'
 import { createServerSupabaseClient } from '@/lib/db/supabase'
+import { sha256 } from '@/lib/crypto'
 
-async function sha256(s: string) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
+const ONE_HOUR_MS = 60 * 60 * 1000
 
 async function isAuthorized(req: Request): Promise<boolean> {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
   if (!token) return false
-  // Local dev / admin fallback
-  if (process.env.MCP_API_KEY && token === process.env.MCP_API_KEY) return true
+
+  // Local dev / admin fallback — timing-safe comparison
+  if (process.env.MCP_API_KEY) {
+    const a = Buffer.from(token)
+    const b = Buffer.from(process.env.MCP_API_KEY)
+    if (a.length === b.length && timingSafeEqual(a, b)) return true
+  }
+
   // Per-user key: hash and look up
   const hash = await sha256(token)
   const supabase = createServerSupabaseClient()
   const { data } = await supabase
     .from('mcp_api_keys')
-    .select('id')
+    .select('id, last_used_at')
     .eq('key_hash', hash)
     .is('revoked_at', null)
     .single()
+
   if (data) {
-    await supabase.from('mcp_api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', data.id)
+    // Throttle: only write if last used over an hour ago (or never)
+    const stale = !data.last_used_at || Date.now() - new Date(data.last_used_at).getTime() > ONE_HOUR_MS
+    if (stale) {
+      await supabase.from('mcp_api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', data.id)
+    }
   }
   return !!data
 }

@@ -1,11 +1,7 @@
 import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
+import { sha256 } from '@/lib/crypto'
 import { z } from 'zod'
-
-async function sha256(s: string) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
 
 function generateKey() {
   const raw = `ahub_${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '')}`
@@ -22,7 +18,7 @@ export async function GET() {
   const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
     .from('mcp_api_keys')
-    .select('id, name, key_prefix, key_raw, created_at, last_used_at')
+    .select('id, name, key_prefix, created_at, last_used_at')
     .eq('user_id', user.id)
     .is('revoked_at', null)
     .order('created_at', { ascending: false })

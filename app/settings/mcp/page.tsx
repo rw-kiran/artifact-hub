@@ -13,7 +13,7 @@ export default async function McpSettingsPage() {
   const supabase = createServerSupabaseClient()
   const { data: keys } = await supabase
     .from('mcp_api_keys')
-    .select('id, name, key_prefix, key_raw, created_at, last_used_at')
+    .select('id, name, key_prefix, created_at, last_used_at')
     .eq('user_id', user.id)
     .is('revoked_at', null)
     .order('created_at', { ascending: false })

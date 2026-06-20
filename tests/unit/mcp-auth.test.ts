@@ -5,11 +5,14 @@ vi.mock('@/lib/mcp/server', () => ({
 }))
 
 const mockSingle = vi.fn()
+const mockUpdateEq = vi.fn().mockResolvedValue({ error: null })
+const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq })
+
 vi.mock('@/lib/db/supabase', () => ({
   createServerSupabaseClient: () => ({
     from: () => ({
       select: () => ({ eq: () => ({ is: () => ({ single: mockSingle }) }) }),
-      update: () => ({ eq: vi.fn() }),
+      update: mockUpdate,
     }),
   }),
 }))
@@ -21,6 +24,8 @@ const OLD_ENV = process.env
 beforeEach(() => {
   process.env = { ...OLD_ENV, MCP_API_KEY: 'test-secret' }
   mockSingle.mockResolvedValue({ data: null, error: { message: 'not found' } })
+  mockUpdate.mockClear()
+  mockUpdateEq.mockClear()
 })
 
 describe('MCP route auth', () => {
@@ -68,7 +73,7 @@ describe('MCP route auth', () => {
 
   it('passes with valid DB key when no env key', async () => {
     process.env = { ...OLD_ENV, MCP_API_KEY: undefined }
-    mockSingle.mockResolvedValue({ data: { id: 'key-1' }, error: null })
+    mockSingle.mockResolvedValue({ data: { id: 'key-1', last_used_at: null }, error: null })
     const res = await POST(
       new Request('http://localhost/api/mcp', {
         method: 'POST',
@@ -76,5 +81,46 @@ describe('MCP route auth', () => {
       }),
     )
     expect(res.status).toBe(200)
+  })
+})
+
+describe('last_used_at throttle', () => {
+  beforeEach(() => {
+    process.env = { ...OLD_ENV, MCP_API_KEY: undefined }
+  })
+
+  it('updates last_used_at when key has never been used', async () => {
+    mockSingle.mockResolvedValue({ data: { id: 'key-1', last_used_at: null }, error: null })
+    await POST(
+      new Request('http://localhost/api/mcp', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ahub_validdbkey' },
+      }),
+    )
+    expect(mockUpdate).toHaveBeenCalled()
+  })
+
+  it('updates last_used_at when used over 1 hour ago', async () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+    mockSingle.mockResolvedValue({ data: { id: 'key-1', last_used_at: twoHoursAgo }, error: null })
+    await POST(
+      new Request('http://localhost/api/mcp', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ahub_validdbkey' },
+      }),
+    )
+    expect(mockUpdate).toHaveBeenCalled()
+  })
+
+  it('skips last_used_at update when used within the last hour', async () => {
+    const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    mockSingle.mockResolvedValue({ data: { id: 'key-1', last_used_at: thirtyMinsAgo }, error: null })
+    await POST(
+      new Request('http://localhost/api/mcp', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ahub_validdbkey' },
+      }),
+    )
+    expect(mockUpdate).not.toHaveBeenCalled()
   })
 })
