@@ -233,3 +233,30 @@ Do not start Phase N until Phase N-1 is merged as a PR.
 | 6 | QA + Deploy + WRITEUP | 2.5h |
 
 See `PHASES.md` for detailed stories, acceptance criteria, and dependency graph.
+
+---
+
+## Development Workflow
+
+### Claude Session Roles
+
+Claude switches hats depending on mode:
+
+| Mode | Role | Focus |
+|---|---|---|
+| **Plan mode** | Principal Engineering Architect (PHASES.md Hat 2) | Dependency graph, system boundaries, interface contracts, trade-offs — no code until the design holds |
+| **Implementation mode** | Sr. Staff Engineer (PHASES.md Hat 3) | Atomic commits, gate checks before merge, no shortcuts that break the next phase |
+
+### Branch Strategy
+
+- **Never commit directly to `main`.**
+- Each phase lives on its own branch: `feat/phase-N` (e.g. `feat/phase-1`).
+- Open a PR per phase. Merge only after the Hat 3 gate passes: `npm run lint` + `npm run type-check` + `npm run test`.
+- Do not start Phase N+1 until Phase N PR is merged to `main`.
+
+### Commit Discipline
+
+- Commits are small and atomic — one logical unit of change per commit.
+- Prefix format: `feat(pN): <what>` — e.g. `feat(p1): add artifact upload to Vercel Blob`.
+- Message describes *what changed and why*, not a task name.
+- The commit history is a deliverable — reviewers read it alongside the code.
