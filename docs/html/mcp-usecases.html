@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Artifact Hub — MCP Use Case Matrix</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fff; color: #111827;
+      padding: 40px; max-width: 960px; margin: 0 auto;
+    }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #6b7280; margin-bottom: 28px; }
+
+    .tools-header { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
+    .tool-badge {
+      font-size: 11px; font-family: monospace; padding: 3px 9px;
+      border-radius: 4px; font-weight: 600; border: 1.5px solid; cursor: default;
+    }
+    .t-publish  { color: #7c3aed; border-color: #7c3aed; background: #f5f3ff; }
+    .t-list     { color: #0369a1; border-color: #0369a1; background: #f0f9ff; }
+    .t-get      { color: #065f46; border-color: #065f46; background: #ecfdf5; }
+    .t-search   { color: #b45309; border-color: #b45309; background: #fffbeb; }
+    .t-share    { color: #be185d; border-color: #be185d; background: #fdf2f8; }
+    .t-feedback { color: #1d4ed8; border-color: #1d4ed8; background: #eff6ff; }
+    .t-summary  { color: #dc2626; border-color: #dc2626; background: #fef2f2; }
+
+    .section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+      color: #9ca3af; margin: 28px 0 10px;
+    }
+    .divider { border: none; border-top: 1.5px solid #e5e7eb; margin: 24px 0 8px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      text-align: left; padding: 7px 12px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af;
+      border-bottom: 1.5px solid #e5e7eb; background: #f9fafb;
+    }
+    tbody tr { border-bottom: 1px solid #f3f4f6; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f9fafb; }
+    td { padding: 10px 12px; vertical-align: top; line-height: 1.5; }
+    td:first-child { width: 30%; font-weight: 500; color: #111827; }
+    td:nth-child(2) { width: 30%; color: #374151; font-style: italic; }
+    td:nth-child(3) { width: 40%; }
+
+    .chain { display: flex; flex-direction: column; gap: 3px; }
+    .chain-step { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+    .arrow { color: #9ca3af; font-size: 11px; }
+    .sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+
+    .gap-badge {
+      display: inline-block; font-size: 10px; padding: 2px 6px;
+      border-radius: 3px; font-weight: 600;
+      background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;
+    }
+    .ok-badge {
+      display: inline-block; font-size: 10px; padding: 2px 6px;
+      border-radius: 3px; font-weight: 600;
+      background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0;
+    }
+
+    footer { margin-top: 40px; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+  </style>
+</head>
+<body>
+
+<h1>Artifact Hub — MCP Use Case Matrix</h1>
+<p class="subtitle">All 7 MCP tools, single-tool uses, multi-step chains, and coverage gaps.</p>
+
+<!-- Legend -->
+<div class="tools-header">
+  <span class="tool-badge t-publish">publish_artifact</span>
+  <span class="tool-badge t-list">list_artifacts</span>
+  <span class="tool-badge t-get">get_artifact</span>
+  <span class="tool-badge t-search">search_artifacts</span>
+  <span class="tool-badge t-share">share_artifact</span>
+  <span class="tool-badge t-feedback">add_feedback</span>
+  <span class="tool-badge t-summary">summarize_feedback</span>
+</div>
+
+<!-- Single tool -->
+<div class="section-title">Single tool</div>
+<table>
+  <thead><tr><th>Use case</th><th>Prompt example</th><th>Tool chain</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Browse the gallery</td>
+      <td>"Show me all artifacts"</td>
+      <td><div class="chain"><div class="chain-step"><span class="tool-badge t-list">list_artifacts</span></div></div></td>
+    </tr>
+    <tr>
+      <td>Browse by type</td>
+      <td>"List all PDFs" / "Show HTML artifacts"</td>
+      <td><div class="chain"><div class="chain-step"><span class="tool-badge t-list">list_artifacts</span></div><div class="sub">type=pdf / html / image</div></div></td>
+    </tr>
+    <tr>
+      <td>Browse by tag</td>
+      <td>"What has the 'design' tag?"</td>
+      <td><div class="chain"><div class="chain-step"><span class="tool-badge t-list">list_artifacts</span></div><div class="sub">tag=design</div></div></td>
+    </tr>
+    <tr>
+      <td>Keyword search</td>
+      <td>"Find artifacts about dashboards"</td>
+      <td><div class="chain"><div class="chain-step"><span class="tool-badge t-search">search_artifacts</span></div></div></td>
+    </tr>
+    <tr>
+      <td>Publish from URL</td>
+      <td>"Publish this image: https://…"</td>
+      <td><div class="chain"><div class="chain-step"><span class="tool-badge t-publish">publish_artifact</span></div></div></td>
+    </tr>
+    <tr>
+      <td>Publish with metadata</td>
+      <td>"Publish this HTML, call it 'Q4 Dashboard', tag it 'finance'"</td>
+      <td><div class="chain"><div class="chain-step"><span class="tool-badge t-publish">publish_artifact</span></div><div class="sub">title, tags, visibility params</div></div></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr class="divider" />
+
+<!-- 2-step chains -->
+<div class="section-title">2-step chains</div>
+<table>
+  <thead><tr><th>Use case</th><th>Prompt example</th><th>Tool chain</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Look up artifact details</td>
+      <td>"Tell me about the Pikachu artifact"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-search">search_artifacts</span><span class="arrow">→</span><span class="tool-badge t-get">get_artifact</span></div>
+        <div class="sub">search by title → get full detail + feedback</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Look up by title directly</td>
+      <td>"Get me the landing page artifact"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-get">get_artifact</span></div>
+        <div class="sub">title= param → single result or candidate list</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Look up by tag directly</td>
+      <td>"Find artifacts tagged 'finance' and show me details"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-get">get_artifact</span></div>
+        <div class="sub">tags= param</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Share a specific artifact</td>
+      <td>"Share the landing page artifact"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-share">share_artifact</span></div>
+        <div class="sub">query= triggers internal search → link or candidate list if ambiguous</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Leave a review</td>
+      <td>"Give 4 stars to the data viz artifact"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-search">search_artifacts</span><span class="arrow">→</span><span class="tool-badge t-feedback">add_feedback</span></div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Read AI review summary</td>
+      <td>"What do people think about the chart artifact?"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-search">search_artifacts</span><span class="arrow">→</span><span class="tool-badge t-summary">summarize_feedback</span></div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Publish then share immediately</td>
+      <td>"Publish this PDF and send me a link"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-publish">publish_artifact</span><span class="arrow">→</span><span class="tool-badge t-share">share_artifact</span></div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Publish then review</td>
+      <td>"Publish this mockup, then add a note saying it needs accessibility work"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-publish">publish_artifact</span><span class="arrow">→</span><span class="tool-badge t-feedback">add_feedback</span></div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Check rating of latest artifact</td>
+      <td>"What's the feedback summary for the newest artifact?"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-list">list_artifacts</span><span class="arrow">→</span><span class="tool-badge t-summary">summarize_feedback</span></div>
+        <div class="sub">list limit=1 → summarize top result</div>
+      </div></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr class="divider" />
+
+<!-- Multi-step flows -->
+<div class="section-title">Multi-step flows</div>
+<table>
+  <thead><tr><th>Use case</th><th>Prompt example</th><th>Tool chain</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Publish → review → share</td>
+      <td>"Upload this mockup, rate it 5 stars, and share it with the team"</td>
+      <td><div class="chain">
+        <div class="chain-step">
+          <span class="tool-badge t-publish">publish_artifact</span><span class="arrow">→</span>
+          <span class="tool-badge t-feedback">add_feedback</span><span class="arrow">→</span>
+          <span class="tool-badge t-share">share_artifact</span>
+        </div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Curated recommendations</td>
+      <td>"Find good HTML artifacts and pick the top-rated one"</td>
+      <td><div class="chain">
+        <div class="chain-step">
+          <span class="tool-badge t-list">list_artifacts</span><span class="arrow">→</span>
+          <span class="tool-badge t-get">get_artifact</span><span class="arrow">→</span>
+          <span class="tool-badge t-summary">summarize_feedback</span>
+        </div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Peer review workflow</td>
+      <td>"Find the report artifact, review it, then show me the feedback summary"</td>
+      <td><div class="chain">
+        <div class="chain-step">
+          <span class="tool-badge t-search">search_artifacts</span><span class="arrow">→</span>
+          <span class="tool-badge t-get">get_artifact</span><span class="arrow">→</span>
+          <span class="tool-badge t-feedback">add_feedback</span><span class="arrow">→</span>
+          <span class="tool-badge t-summary">summarize_feedback</span>
+        </div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Share with expiry + notify</td>
+      <td>"Find the Q4 report, create a 48h link, give me the URL to paste in Slack"</td>
+      <td><div class="chain">
+        <div class="chain-step">
+          <span class="tool-badge t-search">search_artifacts</span><span class="arrow">→</span>
+          <span class="tool-badge t-share">share_artifact</span>
+        </div>
+        <div class="sub">expires_in_hours=48</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Publish batch from URLs</td>
+      <td>"Publish these 3 images: [url1] [url2] [url3]"</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-publish">publish_artifact</span><span class="arrow">×3</span></div>
+        <div class="sub">Claude calls publish_artifact once per URL in sequence</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Full end-to-end onboarding</td>
+      <td>"Publish my logo, add a description, then share it with my client"</td>
+      <td><div class="chain">
+        <div class="chain-step">
+          <span class="tool-badge t-publish">publish_artifact</span><span class="arrow">→</span>
+          <span class="tool-badge t-feedback">add_feedback</span><span class="arrow">→</span>
+          <span class="tool-badge t-share">share_artifact</span>
+        </div>
+        <div class="sub">feedback used as annotation / description comment</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Browse → compare → pick best</td>
+      <td>"Show all PDFs, read the details of the top 3, and tell me which has the best feedback"</td>
+      <td><div class="chain">
+        <div class="chain-step">
+          <span class="tool-badge t-list">list_artifacts</span><span class="arrow">→</span>
+          <span class="tool-badge t-get">get_artifact</span><span class="arrow">×3 →</span>
+          <span class="tool-badge t-summary">summarize_feedback</span><span class="arrow">×3</span>
+        </div>
+      </div></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr class="divider" />
+
+<!-- Elicitation / human-in-the-loop -->
+<div class="section-title">Human-in-the-loop (ambiguous inputs)</div>
+<table>
+  <thead><tr><th>Trigger</th><th>What Claude does</th><th>Tool behavior</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Vague artifact name matches multiple</td>
+      <td>"Share the report" when 4 artifacts have 'report' in the title</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-share">share_artifact</span></div>
+        <div class="sub">returns candidates list → Claude asks user to pick → re-calls with artifact_id</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>Title search returns multiple</td>
+      <td>"Get me the dashboard artifact" → 3 matches</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-get">get_artifact</span></div>
+        <div class="sub">returns candidates list → Claude asks user to confirm</div>
+      </div></td>
+    </tr>
+    <tr>
+      <td>No artifact_id, no query</td>
+      <td>"Share an artifact" with nothing else</td>
+      <td><div class="chain">
+        <div class="chain-step"><span class="tool-badge t-share">share_artifact</span></div>
+        <div class="sub">returns clarification prompt → Claude asks for title or ID</div>
+      </div></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr class="divider" />
+
+<!-- Gaps -->
+<div class="section-title">Coverage gaps (no tool today)</div>
+<table>
+  <thead><tr><th>Missing use case</th><th>What would be needed</th><th>Workaround</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Edit artifact metadata</td>
+      <td><span class="gap-badge">MISSING</span> update_artifact (PATCH /artifacts/:id)</td>
+      <td>Edit manually in the web UI</td>
+    </tr>
+    <tr>
+      <td>Delete an artifact</td>
+      <td><span class="gap-badge">MISSING</span> delete_artifact tool</td>
+      <td>Web UI only</td>
+    </tr>
+    <tr>
+      <td>List own private artifacts</td>
+      <td><span class="gap-badge">MISSING</span> user auth context not threaded to list_artifacts — public only</td>
+      <td>Web UI gallery</td>
+    </tr>
+    <tr>
+      <td>Upload a local file directly</td>
+      <td><span class="gap-badge">PROTOCOL LIMIT</span> MCP has no binary transport</td>
+      <td>Host file publicly first → publish_artifact(url=…)</td>
+    </tr>
+    <tr>
+      <td>Upload image generated by Claude</td>
+      <td><span class="gap-badge">PROTOCOL LIMIT</span> Claude can't push bytes over MCP</td>
+      <td>Save image to hosting URL → publish_artifact(url=…)</td>
+    </tr>
+    <tr>
+      <td>Delete / edit a comment</td>
+      <td><span class="gap-badge">MISSING</span> delete_feedback / update_feedback tools</td>
+      <td>No workaround today</td>
+    </tr>
+    <tr>
+      <td>Browse share links</td>
+      <td><span class="gap-badge">MISSING</span> list_shares tool</td>
+      <td>Call get_artifact → check share_tokens in response</td>
+    </tr>
+  </tbody>
+</table>
+
+<footer>
+  Generated for Artifact Hub · Phase 4 MCP Server · 2026-06-20
+</footer>
+
+</body>
+</html>
