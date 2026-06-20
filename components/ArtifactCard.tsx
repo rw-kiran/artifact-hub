@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Artifact } from '@/lib/types'
 
 const TYPE_COLORS: Record<Artifact['type'], string> = {
@@ -22,12 +23,14 @@ export function ArtifactCard({ artifact }: { artifact: Artifact }) {
       href={`/artifacts/${artifact.id}`}
       className="block rounded-lg border bg-white overflow-hidden hover:shadow-md transition-shadow"
     >
-      <div className="h-36 bg-gray-100 flex items-center justify-center overflow-hidden">
+      <div className="h-36 bg-gray-100 relative flex items-center justify-center overflow-hidden">
         {artifact.type === 'image' ? (
-          <img
+          <Image
             src={artifact.blob_url}
             alt={artifact.title}
-            className="w-full h-full object-cover"
+            fill
+            sizes="(max-width: 640px) 100vw, 33vw"
+            className="object-cover"
           />
         ) : (
           <span className={`text-sm font-semibold px-3 py-1 rounded ${TYPE_COLORS[artifact.type]}`}>

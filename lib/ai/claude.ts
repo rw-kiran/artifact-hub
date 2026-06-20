@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { Langfuse } from 'langfuse'
 
+if (!process.env.ANTHROPIC_API_KEY && process.env.NODE_ENV !== 'test') {
+  console.warn(JSON.stringify({ event: 'anthropic_missing_key', note: 'Required for Phase 5 AI features' }))
+}
 export const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' })
 
 // ponytail: langfuse is null in dev if keys are absent; Phase 5 makes it required
