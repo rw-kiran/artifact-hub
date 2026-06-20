@@ -1,0 +1,76 @@
+export type ArtifactType = 'html' | 'image' | 'pdf'
+export type Visibility = 'public' | 'private'
+
+export interface Artifact {
+  id: string
+  title: string
+  description: string
+  tags: string[]
+  type: ArtifactType
+  blob_url: string
+  blob_pathname: string
+  created_by: string | null
+  creator_name: string | null
+  creator_email: string | null
+  visibility: Visibility
+  created_at: string
+  updated_at: string
+}
+
+export interface Feedback {
+  id: string
+  artifact_id: string
+  author_email: string
+  author_name: string | null
+  content: string
+  rating: number | null
+  created_at: string
+}
+
+export interface ShareToken {
+  id: string
+  artifact_id: string
+  token: string
+  expires_at: string
+  created_at: string
+}
+
+export interface ArtifactWithFeedback extends Artifact {
+  feedback: Feedback[]
+  feedback_summary: string | null
+}
+
+// API response shapes
+export interface ApiError {
+  error: string
+  code: string
+}
+
+// MCP tool input shapes (validated by Zod at the boundary)
+export interface PublishArtifactInput {
+  url: string
+  type: ArtifactType
+  title?: string
+  description?: string
+  tags?: string[]
+  visibility?: Visibility
+}
+
+export interface SearchArtifactsInput {
+  query: string
+  type?: ArtifactType
+  limit?: number
+}
+
+export interface AddFeedbackInput {
+  artifact_id: string
+  author_email: string
+  author_name?: string
+  content: string
+  rating?: number
+}
+
+export interface ShareArtifactInput {
+  artifact_id: string
+  expires_in_hours?: number
+}
