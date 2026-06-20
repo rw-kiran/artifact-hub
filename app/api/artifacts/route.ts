@@ -1,6 +1,5 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { createServerSupabaseClient } from '@/lib/db/supabase'
+import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { CreateArtifactSchema } from '@/lib/validation'
 
 export async function GET(request: Request) {
@@ -22,7 +21,11 @@ export async function GET(request: Request) {
 
   if (type && ['html', 'image', 'pdf'].includes(type)) query = query.eq('type', type)
   if (tag) query = query.contains('tags', [tag])
-  if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`)
+  if (q) {
+    // Strip PostgREST filter metacharacters to prevent filter injection
+    const safe = q.replace(/[(),]/g, '')
+    query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`)
+  }
 
   const { data, error } = await query
 
@@ -36,22 +39,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    },
-  )
-
-  const { data: { user } } = await authClient.auth.getUser()
+  const { data: { user } } = await createAuthClient(cookieStore).auth.getUser()
   if (!user) {
     return Response.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
   }

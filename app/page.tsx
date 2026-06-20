@@ -1,6 +1,5 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { createServerSupabaseClient } from '@/lib/db/supabase'
+import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { ArtifactCard } from '@/components/ArtifactCard'
 import { SearchBar } from '@/components/SearchBar'
 import Link from 'next/link'
@@ -34,17 +33,10 @@ export default async function GalleryPage({
   const q = sp.q
 
   const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (_: { name: string; value: string; options: CookieOptions }[]) => {},
-      },
-    },
-  )
-  const { data: { user } } = await authClient.auth.getUser()
+  const { data: { user } } = await createAuthClient({
+    getAll: () => cookieStore.getAll(),
+    set: () => {},
+  }).auth.getUser()
   const isMine = sp.mine === 'true' && !!user
 
   let supabase: ReturnType<typeof createServerSupabaseClient>
@@ -69,7 +61,10 @@ export default async function GalleryPage({
   }
 
   if (type && ['html', 'image', 'pdf'].includes(type)) query = query.eq('type', type)
-  if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`)
+  if (q) {
+    const safe = q.replace(/[(),]/g, '')
+    query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`)
+  }
 
   const { data: artifacts, error: dbError } = await Promise.race([
     query,
