@@ -1,3 +1,5 @@
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient } from '@/lib/db/supabase'
 import { ArtifactCard } from '@/components/ArtifactCard'
 import { SearchBar } from '@/components/SearchBar'
@@ -11,11 +13,12 @@ const TYPE_TABS = [
   { label: 'PDF', value: 'pdf' },
 ]
 
-function tabHref(value: string, q: string | undefined, page: number) {
+function buildHref(p: { type?: string; q?: string; mine?: boolean; page?: number }) {
   const params = new URLSearchParams()
-  if (value) params.set('type', value)
-  if (q) params.set('q', q)
-  if (page > 1) params.set('page', String(page))
+  if (p.type) params.set('type', p.type)
+  if (p.q) params.set('q', p.q)
+  if (p.mine) params.set('mine', 'true')
+  if (p.page && p.page > 1) params.set('page', String(p.page))
   const qs = params.toString()
   return qs ? `/?${qs}` : '/'
 }
@@ -23,51 +26,98 @@ function tabHref(value: string, q: string | undefined, page: number) {
 export default async function GalleryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; type?: string; page?: string }>
+  searchParams: Promise<{ q?: string; type?: string; page?: string; mine?: string }>
 }) {
   const sp = await searchParams
-  const page = Math.max(1, Number(sp.page ?? '1'))
+  const page = Math.max(1, parseInt(sp.page ?? '1', 10) || 1)
   const type = sp.type as ArtifactType | undefined
   const q = sp.q
 
-  const supabase = createServerSupabaseClient()
-  const from = (page - 1) * 20
+  const cookieStore = await cookies()
+  const authClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (_: { name: string; value: string; options: CookieOptions }[]) => {},
+      },
+    },
+  )
+  const { data: { user } } = await authClient.auth.getUser()
+  const isMine = sp.mine === 'true' && !!user
 
+  let supabase: ReturnType<typeof createServerSupabaseClient>
+  try {
+    supabase = createServerSupabaseClient()
+  } catch (e) {
+    console.error('[GalleryPage] supabase client error', e)
+    return <main className="p-8 text-red-600">DB client error — check server logs</main>
+  }
+
+  const from = (page - 1) * 20
   let query = supabase
     .from('artifacts')
     .select('*')
-    .eq('visibility', 'public')
     .order('created_at', { ascending: false })
     .range(from, from + 19)
+
+  if (isMine) {
+    query = query.eq('created_by', user!.id)
+  } else {
+    query = query.eq('visibility', 'public')
+  }
 
   if (type && ['html', 'image', 'pdf'].includes(type)) query = query.eq('type', type)
   if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`)
 
-  const { data: artifacts } = await query
+  const { data: artifacts, error: dbError } = await Promise.race([
+    query,
+    new Promise<{ data: null; error: Error }>((resolve) =>
+      setTimeout(() => resolve({ data: null, error: new Error('DB timeout') }), 5000)
+    ),
+  ])
+
+  if (dbError) {
+    console.error(JSON.stringify({ event: 'gallery_query_error', error: dbError.message }))
+  }
 
   return (
     <main className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="flex flex-col gap-6">
         <SearchBar defaultValue={q} />
-        <div className="flex gap-2 flex-wrap">
-          {TYPE_TABS.map(({ label, value }) => {
-            const active = (sp.type ?? '') === value
-            return (
+        <div className="flex gap-2 flex-wrap items-center">
+          {TYPE_TABS.map(({ label, value }) => (
+            <Link
+              key={value}
+              href={buildHref({ type: value || undefined, q, mine: isMine })}
+              className={`px-3 py-1.5 text-sm rounded-md ${
+                (sp.type ?? '') === value && !isMine
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+          {user && (
+            <>
+              <span className="text-gray-300 select-none">|</span>
               <Link
-                key={value}
-                href={tabHref(value, q, 1)}
+                href={buildHref({ type: sp.type, q, mine: !isMine })}
                 className={`px-3 py-1.5 text-sm rounded-md ${
-                  active ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  isMine ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {label}
+                My uploads
               </Link>
-            )
-          })}
+            </>
+          )}
         </div>
+
         {!artifacts?.length ? (
           <div className="text-center py-16 text-gray-400">
-            No artifacts yet.{' '}
+            {isMine ? "You haven't uploaded anything yet." : 'No artifacts yet.'}{' '}
             <Link href="/artifacts/upload" className="text-black underline">
               Upload one
             </Link>
@@ -80,18 +130,19 @@ export default async function GalleryPage({
             ))}
           </div>
         )}
+
         {artifacts && artifacts.length === 20 && (
           <div className="flex justify-center gap-4">
             {page > 1 && (
               <Link
-                href={tabHref(sp.type ?? '', q, page - 1)}
+                href={buildHref({ type: sp.type, q, mine: isMine, page: page - 1 })}
                 className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
               >
                 Previous
               </Link>
             )}
             <Link
-              href={tabHref(sp.type ?? '', q, page + 1)}
+              href={buildHref({ type: sp.type, q, mine: isMine, page: page + 1 })}
               className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
             >
               Next
