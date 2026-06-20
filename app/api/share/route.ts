@@ -110,12 +110,15 @@ export async function DELETE(request: Request) {
   if (!token_id) {
     return Response.json({ error: 'token_id required', code: 'VALIDATION_ERROR' }, { status: 400 })
   }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token_id)) {
+    return Response.json({ error: 'Invalid token_id', code: 'VALIDATION_ERROR' }, { status: 400 })
+  }
 
   const supabase = createServerSupabaseClient()
 
   const { data: tokenRow } = await supabase
     .from('share_tokens')
-    .select('id, artifact_id, artifacts!inner(created_by)')
+    .select('id, artifact_id')
     .eq('id', token_id)
     .single()
 
@@ -123,8 +126,13 @@ export async function DELETE(request: Request) {
     return Response.json({ error: 'Token not found', code: 'NOT_FOUND' }, { status: 404 })
   }
 
-  const created_by = (tokenRow.artifacts as unknown as { created_by: string }).created_by
-  if (created_by !== user.id) {
+  const { data: artifact } = await supabase
+    .from('artifacts')
+    .select('created_by')
+    .eq('id', tokenRow.artifact_id)
+    .single()
+
+  if (!artifact || artifact.created_by !== user.id) {
     return Response.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 })
   }
 

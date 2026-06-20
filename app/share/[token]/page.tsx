@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from '@/lib/db/supabase'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import type { Artifact, ShareToken } from '@/lib/types'
+import type { Artifact } from '@/lib/types'
 
 export default async function SharePage({
   params,
@@ -14,15 +14,13 @@ export default async function SharePage({
 
   const { data: tokenRow } = await supabase
     .from('share_tokens')
-    .select('*')
+    .select('artifact_id, expires_at')
     .eq('token', token)
     .single()
 
   if (!tokenRow) notFound()
 
-  const shareToken = tokenRow as ShareToken
-
-  if (new Date(shareToken.expires_at) <= new Date()) {
+  if (new Date(tokenRow.expires_at) <= new Date()) {
     return (
       <main className="container mx-auto px-4 py-16 max-w-2xl text-center">
         <h1 className="text-2xl font-bold mb-4">This link has expired</h1>
@@ -39,14 +37,14 @@ export default async function SharePage({
   const { data: artifactData } = await supabase
     .from('artifacts')
     .select('*')
-    .eq('id', shareToken.artifact_id)
+    .eq('id', tokenRow.artifact_id)
     .single()
 
   if (!artifactData) notFound()
 
   const artifact = artifactData as Artifact
   const hoursRemaining = Math.ceil(
-    (new Date(shareToken.expires_at).getTime() - Date.now()) / 3_600_000,
+    (new Date(tokenRow.expires_at).getTime() - Date.now()) / 3_600_000,
   )
 
   return (

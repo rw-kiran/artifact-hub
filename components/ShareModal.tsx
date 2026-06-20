@@ -10,6 +10,7 @@ export function ShareModal({ artifactId }: { artifactId: string }) {
   const [links, setLinks] = useState<ShareToken[]>([])
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function loadLinks() {
     const res = await fetch(`/api/share?artifact_id=${artifactId}`)
@@ -26,6 +27,7 @@ export function ShareModal({ artifactId }: { artifactId: string }) {
 
   async function generate() {
     setLoading(true)
+    setError(null)
     const res = await fetch('/api/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -36,11 +38,18 @@ export function ShareModal({ artifactId }: { artifactId: string }) {
       const json = await res.json() as { url: string }
       setGeneratedUrl(json.url)
       await loadLinks()
+    } else {
+      setError('Failed to generate link. Please try again.')
     }
   }
 
   async function revoke(tokenId: string) {
-    await fetch(`/api/share?token_id=${tokenId}`, { method: 'DELETE' })
+    setError(null)
+    const res = await fetch(`/api/share?token_id=${tokenId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      setError('Failed to revoke link. Please try again.')
+      return
+    }
     // Clear generated URL if it belonged to the revoked token
     const revoked = links.find((l) => l.id === tokenId)
     if (revoked && generatedUrl.includes(revoked.token)) setGeneratedUrl('')
@@ -48,9 +57,14 @@ export function ShareModal({ artifactId }: { artifactId: string }) {
   }
 
   async function copy() {
-    await navigator.clipboard.writeText(generatedUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(generatedUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // ponytail: clipboard blocked (HTTP / permission denied) — fall back to selection
+      document.querySelector<HTMLInputElement>('[aria-label="Share URL"]')?.select()
+    }
   }
 
   function hoursUntil(expiresAt: string) {
@@ -70,13 +84,18 @@ export function ShareModal({ artifactId }: { artifactId: string }) {
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={() => setIsOpen(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setIsOpen(false)}
+          role="presentation"
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-modal-title"
             className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Share artifact</h2>
+              <h2 id="share-modal-title" className="text-lg font-semibold">Share artifact</h2>
               <button
                 onClick={() => setIsOpen(false)}
                 className="text-gray-400 hover:text-gray-600 text-xl leading-none"
@@ -124,6 +143,10 @@ export function ShareModal({ artifactId }: { artifactId: string }) {
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
               </div>
+            )}
+
+            {error && (
+              <p className="mb-4 text-sm text-red-600">{error}</p>
             )}
 
             {links.length > 0 && (
