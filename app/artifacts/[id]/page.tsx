@@ -1,6 +1,7 @@
-import { createServerSupabaseClient } from '@/lib/db/supabase'
+import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { notFound } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import type { Artifact } from '@/lib/types'
 
@@ -21,6 +22,15 @@ export default async function ArtifactDetailPage({
   if (error || !data) notFound()
 
   const artifact = data as Artifact
+
+  if (artifact.visibility === 'private') {
+    const cookieStore = await cookies()
+    const { data: { user } } = await createAuthClient({
+      getAll: () => cookieStore.getAll(),
+      set: () => {},
+    }).auth.getUser()
+    if (!user || user.id !== artifact.created_by) notFound()
+  }
 
   return (
     <main className="container mx-auto px-4 py-8 max-w-4xl">

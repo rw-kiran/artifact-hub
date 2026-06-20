@@ -1,7 +1,15 @@
 import { put } from '@vercel/blob'
 import { isAllowedMimeType, MAX_FILE_SIZE_BYTES } from '@/lib/validation'
+import { cookies } from 'next/headers'
+import { createAuthClient } from '@/lib/db/supabase'
 
 export async function POST(request: Request) {
+  const cookieStore = await cookies()
+  const { data: { user } } = await createAuthClient(cookieStore).auth.getUser()
+  if (!user) {
+    return Response.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
+  }
+
   let formData: FormData
   try {
     formData = await request.formData()

@@ -1,4 +1,5 @@
-import { createServerSupabaseClient } from '@/lib/db/supabase'
+import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
+import { cookies } from 'next/headers'
 
 export async function GET(
   _request: Request,
@@ -17,6 +18,16 @@ export async function GET(
     return Response.json({ error: 'Artifact not found', code: 'NOT_FOUND' }, { status: 404 })
   }
 
-  // ponytail: private visibility check omitted; Phase 2 adds auth guard for private artifacts
+  if (data.visibility === 'private') {
+    const cookieStore = await cookies()
+    const { data: { user } } = await createAuthClient({
+      getAll: () => cookieStore.getAll(),
+      set: () => {},
+    }).auth.getUser()
+    if (!user || user.id !== data.created_by) {
+      return Response.json({ error: 'Artifact not found', code: 'NOT_FOUND' }, { status: 404 })
+    }
+  }
+
   return Response.json({ artifact: data })
 }
