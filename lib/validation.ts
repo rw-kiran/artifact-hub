@@ -33,3 +33,9 @@ export const ShareCreateSchema = z.object({
 })
 
 export type ShareCreateInput = z.infer<typeof ShareCreateSchema>
+
+export const AddFeedbackSchema = z.object({
+  artifact_id: z.string().uuid(),
+  content: z.string().min(10).max(1000),
+  rating: z.number().int().min(1).max(5).optional(),
+})
