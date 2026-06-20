@@ -29,7 +29,9 @@ mcpServer.addTool({
     visibility: z.enum(['public', 'private']).default('public'),
   }),
   execute: async ({ url, title, description, tags, visibility }) => {
-    const response = await fetch(url)
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ArtifactHub/1.0)' },
+    })
     if (!response.ok) return `Failed to fetch URL: HTTP ${response.status}`
 
     const contentType = (response.headers.get('content-type') ?? '').split(';')[0].trim()
@@ -42,6 +44,7 @@ mcpServer.addTool({
     const { url: blobUrl, pathname } = await put(filename, response.body!, {
       access: 'public',
       contentType,
+      addRandomSuffix: true,
     })
 
     const supabase = createServerSupabaseClient()
@@ -52,7 +55,7 @@ mcpServer.addTool({
         blob_pathname: pathname,
         type,
         title: title ?? filename,
-        description: description ?? null,
+        description: description ?? '',
         tags: tags ?? [],
         visibility,
         created_by: null,
@@ -77,7 +80,7 @@ mcpServer.addTool({
     const supabase = createServerSupabaseClient()
     let query = supabase
       .from('artifacts')
-      .select('id, title, type, tags, creator_name, visibility, created_at')
+      .select('id, title, type, tags, blob_url, creator_name, visibility, created_at')
       .eq('visibility', 'public')
       .order('created_at', { ascending: false })
       .limit(limit ?? 20)
