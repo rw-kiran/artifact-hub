@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
   try {
     const pathname = `artifacts/${crypto.randomUUID()}/${file.name}`
-    const blob = await put(pathname, file, { access: 'public', contentType: file.type, contentDisposition: 'inline' })
+    const blob = await put(pathname, file, { access: 'public', contentType: file.type })
     return Response.json({ url: blob.url, pathname: blob.pathname, contentType: file.type })
   } catch (e) {
     console.error(JSON.stringify({ event: 'upload_error', error: e instanceof Error ? e.message : String(e) }))
