@@ -18,7 +18,7 @@ export function ArtifactViewer({ artifact }: { artifact: Artifact }) {
     return (
       <iframe
         srcDoc={srcdoc ?? ''}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-same-origin"
         className="w-full h-[600px] border rounded-lg bg-white"
         title={artifact.title}
       />
