@@ -37,6 +37,7 @@ export default async function ArtifactDetailPage({
 
   const isOwner = user?.id === artifact.created_by
 
+  // ponytail: service role intentionally bypasses RLS — visitors should see feedback on public artifacts
   const { data: feedbackData } = await supabase
     .from('feedback')
     .select('*')

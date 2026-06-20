@@ -38,24 +38,25 @@ export function FeedbackPanel({ initialFeedback, artifactId, currentUser }: Prop
     setSubmitting(true)
     setError(null)
 
-    const res = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ artifact_id: artifactId, content: savedContent, rating: savedRating ?? undefined }),
-    })
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artifact_id: artifactId, content: savedContent, rating: savedRating ?? undefined }),
+      })
 
-    setSubmitting(false)
+      if (!res.ok) throw new Error('server')
 
-    if (!res.ok) {
+      const { feedback: real } = await res.json()
+      setFeedback(prev => prev.map(f => f.id === optimistic.id ? real : f))
+    } catch {
       setFeedback(prev => prev.filter(f => f.id !== optimistic.id))
       setError('Failed to post comment. Please try again.')
       setContent(savedContent)
       setRating(savedRating)
-      return
+    } finally {
+      setSubmitting(false)
     }
-
-    const { feedback: real } = await res.json()
-    setFeedback(prev => prev.map(f => f.id === optimistic.id ? real : f))
   }
 
   return (
@@ -126,7 +127,7 @@ export function FeedbackPanel({ initialFeedback, artifactId, currentUser }: Prop
         </form>
       ) : (
         <p className="text-sm text-gray-500">
-          <a href="/api/auth/signin" className="underline hover:text-gray-700">Sign in</a>{' '}
+          <a href="/auth/signin" className="underline hover:text-gray-700">Sign in</a>{' '}
           to leave feedback.
         </p>
       )}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/db/supabase-browser'
 
 export default function UpdatePasswordPage() {
@@ -45,6 +46,9 @@ export default function UpdatePasswordPage() {
             {loading ? 'Updating…' : 'Update password'}
           </button>
         </form>
+        <Link href="/auth/signin" className="block text-xs text-center text-gray-500 underline hover:text-gray-700 mt-4">
+          Back to sign in
+        </Link>
       </div>
     </main>
   )

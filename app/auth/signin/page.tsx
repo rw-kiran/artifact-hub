@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/db/supabase-browser'
@@ -11,6 +11,12 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    getSupabaseBrowserClient().auth.getSession().then(({ data }) => {
+      if (data.session) router.replace('/')
+    })
+  }, [router])
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault()

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isAllowedMimeType, MAX_FILE_SIZE_BYTES, CreateArtifactSchema, ShareCreateSchema } from '@/lib/validation'
+import { isAllowedMimeType, MAX_FILE_SIZE_BYTES, CreateArtifactSchema, ShareCreateSchema, AddFeedbackSchema } from '@/lib/validation'
 
 describe('isAllowedMimeType', () => {
   it.each(['text/html', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'])(
@@ -101,5 +101,62 @@ describe('ShareCreateSchema', () => {
   it('accepts expires_in_hours at boundaries', () => {
     expect(ShareCreateSchema.safeParse({ ...validShare, expires_in_hours: 1 }).success).toBe(true)
     expect(ShareCreateSchema.safeParse({ ...validShare, expires_in_hours: 168 }).success).toBe(true)
+  })
+})
+
+describe('AddFeedbackSchema', () => {
+  const validFeedback = {
+    artifact_id: '00000000-0000-0000-0000-000000000001',
+    content: 'This is a great artifact!',
+  }
+
+  it('accepts valid feedback without rating', () => {
+    expect(AddFeedbackSchema.safeParse(validFeedback).success).toBe(true)
+  })
+
+  it('accepts valid feedback with rating', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, rating: 3 }).success).toBe(true)
+  })
+
+  it('accepts rating at boundaries (1 and 5)', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, rating: 1 }).success).toBe(true)
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, rating: 5 }).success).toBe(true)
+  })
+
+  it('rejects content shorter than 10 characters', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, content: 'Too short' }).success).toBe(false)
+  })
+
+  it('rejects content longer than 1000 characters', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, content: 'x'.repeat(1001) }).success).toBe(false)
+  })
+
+  it('accepts content at boundaries (10 and 1000 chars)', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, content: 'x'.repeat(10) }).success).toBe(true)
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, content: 'x'.repeat(1000) }).success).toBe(true)
+  })
+
+  it('rejects rating of 0', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, rating: 0 }).success).toBe(false)
+  })
+
+  it('rejects rating of 6', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, rating: 6 }).success).toBe(false)
+  })
+
+  it('rejects non-integer rating', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, rating: 3.5 }).success).toBe(false)
+  })
+
+  it('rejects non-UUID artifact_id', () => {
+    expect(AddFeedbackSchema.safeParse({ ...validFeedback, artifact_id: 'not-a-uuid' }).success).toBe(false)
+  })
+
+  it('rejects missing content', () => {
+    expect(AddFeedbackSchema.safeParse({ artifact_id: validFeedback.artifact_id }).success).toBe(false)
+  })
+
+  it('rejects missing artifact_id', () => {
+    expect(AddFeedbackSchema.safeParse({ content: validFeedback.content }).success).toBe(false)
   })
 })
