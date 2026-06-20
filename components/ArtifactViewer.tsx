@@ -1,14 +1,25 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import type { Artifact } from '@/lib/types'
 
 export function ArtifactViewer({ artifact }: { artifact: Artifact }) {
+  const [srcdoc, setSrcdoc] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (artifact.type !== 'html') return
+    fetch(artifact.blob_url)
+      .then((r) => r.text())
+      .then(setSrcdoc)
+      .catch(() => setSrcdoc('<p style="padding:1rem;color:#666">Failed to load content.</p>'))
+  }, [artifact.blob_url, artifact.type])
+
   if (artifact.type === 'html') {
     return (
       <iframe
-        src={artifact.blob_url}
-        sandbox="allow-scripts allow-same-origin"
-        className="w-full h-[600px] border rounded-lg"
+        srcDoc={srcdoc ?? ''}
+        sandbox="allow-scripts"
+        className="w-full h-[600px] border rounded-lg bg-white"
         title={artifact.title}
       />
     )
