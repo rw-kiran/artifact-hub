@@ -3,6 +3,23 @@
 import { useState } from 'react'
 import type { McpApiKey } from '@/lib/types'
 
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  )
+}
+
 export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
   const [keys, setKeys] = useState(initialKeys)
   const [name, setName] = useState('')
@@ -57,9 +74,10 @@ export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
             </pre>
             <button
               onClick={() => copyToClipboard(newKey, 'new')}
-              className="text-xs px-3 py-2 bg-red-800 text-white rounded hover:bg-red-700 shrink-0"
+              title="Copy key"
+              className="p-2 bg-red-800 text-white rounded hover:bg-red-700 shrink-0"
             >
-              {copiedId === 'new' ? 'Copied!' : 'Copy'}
+              {copiedId === 'new' ? <CheckIcon /> : <CopyIcon />}
             </button>
           </div>
           <button
@@ -115,9 +133,10 @@ export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
               {k.key_raw && (
                 <button
                   onClick={() => copyToClipboard(k.key_raw!, k.id)}
-                  className="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50 shrink-0"
+                  title="Copy key"
+                  className="p-1.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-500 hover:text-gray-700 shrink-0"
                 >
-                  {copiedId === k.id ? 'Copied!' : 'Copy'}
+                  {copiedId === k.id ? <CheckIcon /> : <CopyIcon />}
                 </button>
               )}
               <button
