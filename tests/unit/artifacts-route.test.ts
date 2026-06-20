@@ -4,11 +4,9 @@ vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({ getAll: () => [], set: vi.fn() }),
 }))
 
-vi.mock('@supabase/ssr')
 vi.mock('@/lib/db/supabase')
 
-import { createServerClient } from '@supabase/ssr'
-import { createServerSupabaseClient } from '@/lib/db/supabase'
+import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { GET, POST } from '@/app/api/artifacts/route'
 
 const mockArtifact = {
@@ -46,7 +44,7 @@ function makeChain(listResult: unknown, singleResult: unknown) {
 }
 
 function setupAuthMock(user: typeof mockUser | null) {
-  vi.mocked(createServerClient).mockReturnValue({
+  vi.mocked(createAuthClient).mockReturnValue({
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
   } as any)
 }

@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.mock('next/headers', () => ({
+  cookies: vi.fn().mockResolvedValue({ getAll: () => [], set: vi.fn() }),
+}))
+
+vi.mock('@/lib/db/supabase', () => ({
+  createAuthClient: vi.fn().mockReturnValue({
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+  }),
+}))
+
 vi.mock('@vercel/blob', () => ({
   put: vi.fn().mockResolvedValue({
     url: 'https://blob.vercel-storage.com/test.html',
@@ -9,6 +19,7 @@ vi.mock('@vercel/blob', () => ({
 
 import { POST } from '@/app/api/upload/route'
 import { put } from '@vercel/blob'
+import { createAuthClient } from '@/lib/db/supabase'
 
 function makeRequest(file: { type: string; size: number; name: string } | null): Request {
   const req = new Request('http://localhost/api/upload', { method: 'POST', body: '' })
@@ -18,16 +29,30 @@ function makeRequest(file: { type: string; size: number; name: string } | null):
   return req
 }
 
-beforeEach(() => vi.mocked(put).mockResolvedValue({
-  url: 'https://blob.vercel-storage.com/test.html',
-  pathname: 'artifacts/uuid/test.html',
-  contentType: 'text/html',
-  contentDisposition: 'inline; filename="test.html"',
-  downloadUrl: 'https://blob.vercel-storage.com/test.html?download=1',
-  etag: '"abc123"',
-}))
+beforeEach(() => {
+  vi.mocked(createAuthClient).mockReturnValue({
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+  } as any)
+  vi.mocked(put).mockResolvedValue({
+    url: 'https://blob.vercel-storage.com/test.html',
+    pathname: 'artifacts/uuid/test.html',
+    contentType: 'text/html',
+    contentDisposition: 'inline; filename="test.html"',
+    downloadUrl: 'https://blob.vercel-storage.com/test.html?download=1',
+    etag: '"abc123"',
+  })
+})
 
 describe('POST /api/upload', () => {
+  it('returns 401 when unauthenticated', async () => {
+    vi.mocked(createAuthClient).mockReturnValueOnce({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    } as any)
+    const res = await POST(makeRequest({ type: 'text/html', size: 100, name: 'test.html' }))
+    expect(res.status).toBe(401)
+    expect((await res.json()).code).toBe('UNAUTHORIZED')
+  })
+
   it('returns 400 when no file', async () => {
     const res = await POST(makeRequest(null))
     expect(res.status).toBe(400)
