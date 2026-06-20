@@ -46,6 +46,14 @@ export interface ApiError {
   code: string
 }
 
+export interface McpApiKey {
+  id: string
+  name: string
+  key_prefix: string
+  created_at: string
+  last_used_at: string | null
+}
+
 // MCP tool input shapes (validated by Zod at the boundary)
 export interface PublishArtifactInput {
   url: string
