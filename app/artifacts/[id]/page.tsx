@@ -1,5 +1,6 @@
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
+import { ShareModal } from '@/components/ShareModal'
 import { notFound } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
@@ -23,14 +24,17 @@ export default async function ArtifactDetailPage({
 
   const artifact = data as Artifact
 
+  const cookieStore = await cookies()
+  const { data: { user } } = await createAuthClient({
+    getAll: () => cookieStore.getAll(),
+    set: () => {},
+  }).auth.getUser()
+
   if (artifact.visibility === 'private') {
-    const cookieStore = await cookies()
-    const { data: { user } } = await createAuthClient({
-      getAll: () => cookieStore.getAll(),
-      set: () => {},
-    }).auth.getUser()
     if (!user || user.id !== artifact.created_by) notFound()
   }
+
+  const isOwner = user?.id === artifact.created_by
 
   return (
     <main className="container mx-auto px-4 py-8 max-w-4xl">
@@ -39,7 +43,10 @@ export default async function ArtifactDetailPage({
           &larr; Gallery
         </Link>
       </div>
-      <h1 className="text-2xl font-bold mb-2">{artifact.title}</h1>
+      <div className="flex items-start justify-between mb-2">
+        <h1 className="text-2xl font-bold">{artifact.title}</h1>
+        {isOwner && <ShareModal artifactId={artifact.id} />}
+      </div>
       {artifact.description && (
         <p className="text-gray-600 mb-4">{artifact.description}</p>
       )}

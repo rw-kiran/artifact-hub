@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isAllowedMimeType, MAX_FILE_SIZE_BYTES, CreateArtifactSchema } from '@/lib/validation'
+import { isAllowedMimeType, MAX_FILE_SIZE_BYTES, CreateArtifactSchema, ShareCreateSchema } from '@/lib/validation'
 
 describe('isAllowedMimeType', () => {
   it.each(['text/html', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'])(
@@ -67,5 +67,39 @@ describe('CreateArtifactSchema', () => {
         visibility: 'private' as const,
       }).success,
     ).toBe(true)
+  })
+})
+
+describe('ShareCreateSchema', () => {
+  const validShare = { artifact_id: '00000000-0000-0000-0000-000000000000' }
+
+  it('accepts valid artifact_id', () => {
+    expect(ShareCreateSchema.safeParse(validShare).success).toBe(true)
+  })
+
+  it('defaults expires_in_hours to 24', () => {
+    const result = ShareCreateSchema.safeParse(validShare)
+    expect(result.success && result.data.expires_in_hours).toBe(24)
+  })
+
+  it('rejects missing artifact_id', () => {
+    expect(ShareCreateSchema.safeParse({}).success).toBe(false)
+  })
+
+  it('rejects non-UUID artifact_id', () => {
+    expect(ShareCreateSchema.safeParse({ artifact_id: 'not-a-uuid' }).success).toBe(false)
+  })
+
+  it('rejects expires_in_hours below 1', () => {
+    expect(ShareCreateSchema.safeParse({ ...validShare, expires_in_hours: 0 }).success).toBe(false)
+  })
+
+  it('rejects expires_in_hours above 168', () => {
+    expect(ShareCreateSchema.safeParse({ ...validShare, expires_in_hours: 169 }).success).toBe(false)
+  })
+
+  it('accepts expires_in_hours at boundaries', () => {
+    expect(ShareCreateSchema.safeParse({ ...validShare, expires_in_hours: 1 }).success).toBe(true)
+    expect(ShareCreateSchema.safeParse({ ...validShare, expires_in_hours: 168 }).success).toBe(true)
   })
 })
