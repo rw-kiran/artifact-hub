@@ -52,12 +52,12 @@ export function Nav() {
             </button>
           </>
         ) : (
-          <a
-            href="/api/auth/signin"
+          <Link
+            href="/auth/signin"
             className="text-sm font-medium bg-black text-white px-3 py-1.5 rounded-md hover:bg-gray-800"
           >
-            Sign in with GitHub
-          </a>
+            Sign in
+          </Link>
         )}
       </div>
     </nav>
