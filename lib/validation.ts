@@ -26,3 +26,10 @@ export const CreateArtifactSchema = z.object({
 })
 
 export type CreateArtifactInput = z.infer<typeof CreateArtifactSchema>
+
+export const ShareCreateSchema = z.object({
+  artifact_id: z.string().uuid(),
+  expires_in_hours: z.number().int().min(1).max(168).default(24),
+})
+
+export type ShareCreateInput = z.infer<typeof ShareCreateSchema>
