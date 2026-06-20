@@ -44,6 +44,12 @@ export function Nav() {
             >
               Upload
             </Link>
+            <Link
+              href="/settings/mcp"
+              className="text-sm text-gray-600 hover:text-gray-900"
+            >
+              Settings
+            </Link>
             <button
               onClick={handleSignOut}
               className="text-sm text-gray-600 hover:text-gray-900"
