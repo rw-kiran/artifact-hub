@@ -1,0 +1,218 @@
+import { EdgeFastMCP } from 'fastmcp/edge'
+import { z } from 'zod'
+import { put } from '@vercel/blob'
+import { createServerSupabaseClient } from '@/lib/db/supabase'
+import { ALLOWED_MIME_TYPES, isAllowedMimeType } from '@/lib/validation'
+import type { ArtifactType } from '@/lib/types'
+
+export const mcpServer = new EdgeFastMCP({
+  name: 'artifact-hub',
+  version: '1.0.0',
+  mcpPath: '/api/mcp',
+})
+
+function mimeToType(mime: string): ArtifactType | null {
+  if (mime.startsWith('image/')) return 'image'
+  if (mime === 'text/html') return 'html'
+  if (mime === 'application/pdf') return 'pdf'
+  return null
+}
+
+mcpServer.addTool({
+  name: 'publish_artifact',
+  description: 'Publish a new artifact to the hub from a remote URL. Supports HTML, images (JPEG, PNG, GIF, WebP), and PDFs up to 50 MB.',
+  parameters: z.object({
+    url: z.string().url().describe('URL of the file to publish'),
+    title: z.string().max(200).optional().describe('Human-readable title (auto-detected if omitted)'),
+    description: z.string().max(2000).optional(),
+    tags: z.array(z.string().max(50)).max(10).optional(),
+    visibility: z.enum(['public', 'private']).default('public'),
+  }),
+  execute: async ({ url, title, description, tags, visibility }) => {
+    const response = await fetch(url)
+    if (!response.ok) return `Failed to fetch URL: HTTP ${response.status}`
+
+    const contentType = (response.headers.get('content-type') ?? '').split(';')[0].trim()
+    if (!isAllowedMimeType(contentType)) {
+      return `Unsupported file type "${contentType}". Allowed: ${ALLOWED_MIME_TYPES.join(', ')}`
+    }
+    const type = mimeToType(contentType)!
+
+    const filename = url.split('/').pop()?.split('?')[0] ?? 'artifact'
+    const { url: blobUrl, pathname } = await put(filename, response.body!, {
+      access: 'public',
+      contentType,
+    })
+
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase
+      .from('artifacts')
+      .insert({
+        blob_url: blobUrl,
+        blob_pathname: pathname,
+        type,
+        title: title ?? filename,
+        description: description ?? null,
+        tags: tags ?? [],
+        visibility,
+        created_by: null,
+      })
+      .select()
+      .single()
+
+    if (error) return `Failed to create artifact: ${error.message}`
+    return JSON.stringify({ id: data.id, title: data.title, type: data.type, url: blobUrl, visibility: data.visibility })
+  },
+})
+
+mcpServer.addTool({
+  name: 'list_artifacts',
+  description: 'List public artifacts in the hub. Optionally filter by type or tag.',
+  parameters: z.object({
+    type: z.enum(['html', 'image', 'pdf']).optional().describe('Filter by artifact type'),
+    tag: z.string().optional().describe('Filter by tag'),
+    limit: z.number().int().min(1).max(100).default(20),
+  }),
+  execute: async ({ type, tag, limit }) => {
+    const supabase = createServerSupabaseClient()
+    let query = supabase
+      .from('artifacts')
+      .select('id, title, type, tags, creator_name, visibility, created_at')
+      .eq('visibility', 'public')
+      .order('created_at', { ascending: false })
+      .limit(limit ?? 20)
+
+    if (type) query = query.eq('type', type)
+    if (tag) query = query.contains('tags', [tag])
+
+    const { data, error } = await query
+    if (error) return `Failed to list artifacts: ${error.message}`
+    if (!data?.length) return 'No artifacts found.'
+    return JSON.stringify(data)
+  },
+})
+
+mcpServer.addTool({
+  name: 'get_artifact',
+  description: 'Get full details of an artifact including its feedback. Use list_artifacts() to find artifact IDs.',
+  parameters: z.object({
+    id: z.string().uuid().describe('Artifact ID'),
+  }),
+  execute: async ({ id }) => {
+    const supabase = createServerSupabaseClient()
+    const [artifactRes, feedbackRes] = await Promise.all([
+      supabase.from('artifacts').select('*').eq('id', id).single(),
+      supabase.from('feedback').select('*').eq('artifact_id', id).order('created_at', { ascending: true }),
+    ])
+
+    if (artifactRes.error || !artifactRes.data) {
+      return `Artifact not found. Call list_artifacts() to see available IDs.`
+    }
+    return JSON.stringify({ ...artifactRes.data, feedback: feedbackRes.data ?? [] })
+  },
+})
+
+mcpServer.addTool({
+  name: 'search_artifacts',
+  description: 'Search public artifacts by keyword. Matches against title and description.',
+  parameters: z.object({
+    query: z.string().min(1).describe('Search terms'),
+    type: z.enum(['html', 'image', 'pdf']).optional(),
+    limit: z.number().int().min(1).max(50).default(10),
+  }),
+  // ponytail: keyword ilike for Phase 4; Phase 5 replaces with Claude NL parse → structured SQL
+  execute: async ({ query, type, limit }) => {
+    const supabase = createServerSupabaseClient()
+    const escaped = query.replace(/[%_]/g, '\\$&')
+    let q = supabase
+      .from('artifacts')
+      .select('id, title, type, tags, description, created_at')
+      .eq('visibility', 'public')
+      .or(`title.ilike.%${escaped}%,description.ilike.%${escaped}%`)
+      .order('created_at', { ascending: false })
+      .limit(limit ?? 10)
+
+    if (type) q = q.eq('type', type)
+
+    const { data, error } = await q
+    if (error) return `Search failed: ${error.message}`
+    if (!data?.length) return `No artifacts found for "${query}".`
+    return JSON.stringify(data)
+  },
+})
+
+mcpServer.addTool({
+  name: 'share_artifact',
+  description: 'Create a time-limited shareable link for an artifact. The link works for anyone, no login required.',
+  parameters: z.object({
+    artifact_id: z.string().uuid().describe('Artifact ID to share'),
+    expires_in_hours: z.number().int().min(1).max(168).default(24).describe('Link validity in hours (max 168 = 7 days)'),
+  }),
+  execute: async ({ artifact_id, expires_in_hours }) => {
+    const supabase = createServerSupabaseClient()
+    const hours = expires_in_hours ?? 24
+    const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
+
+    const { data, error } = await supabase
+      .from('share_tokens')
+      .insert({ artifact_id, expires_at: expiresAt })
+      .select('token')
+      .single()
+
+    if (error) return `Failed to create share link: ${error.message}. Check the artifact ID with get_artifact().`
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    return JSON.stringify({ url: `${appUrl}/share/${data.token}`, expires_in_hours: hours, expires_at: expiresAt })
+  },
+})
+
+mcpServer.addTool({
+  name: 'add_feedback',
+  description: 'Leave a comment on an artifact, with an optional 1–5 star rating.',
+  parameters: z.object({
+    artifact_id: z.string().uuid().describe('Artifact ID to comment on'),
+    content: z.string().min(10).max(1000).describe('Comment text (10–1000 characters)'),
+    rating: z.number().int().min(1).max(5).optional().describe('Star rating (1 = worst, 5 = best)'),
+    author_name: z.string().max(100).optional(),
+    author_email: z.string().email().optional(),
+  }),
+  execute: async ({ artifact_id, content, rating, author_name, author_email }) => {
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase
+      .from('feedback')
+      .insert({
+        artifact_id,
+        content,
+        rating: rating ?? null,
+        author_name: author_name ?? 'MCP',
+        author_email: author_email ?? 'mcp@artifact-hub',
+      })
+      .select('id, created_at')
+      .single()
+
+    if (error) return `Failed to add feedback: ${error.message}. Verify the artifact ID with get_artifact().`
+    return JSON.stringify({ id: data.id, created_at: data.created_at, message: 'Feedback added successfully.' })
+  },
+})
+
+mcpServer.addTool({
+  name: 'summarize_feedback',
+  description: 'Get the AI-generated summary of feedback for an artifact. Returns existing summary or a prompt to add more comments.',
+  parameters: z.object({
+    artifact_id: z.string().uuid().describe('Artifact ID'),
+  }),
+  execute: async ({ artifact_id }) => {
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase
+      .from('artifacts')
+      .select('id, title, feedback_summary')
+      .eq('id', artifact_id)
+      .single()
+
+    if (error || !data) return `Artifact not found. Call list_artifacts() to see available IDs.`
+    // ponytail: Phase 5 calls summarizeFeedback() from lib/ai/claude.ts when feedback_summary is null
+    if (!data.feedback_summary) {
+      return `No summary yet for "${data.title}". Add 3 or more comments via add_feedback() to generate one.`
+    }
+    return data.feedback_summary
+  },
+})
