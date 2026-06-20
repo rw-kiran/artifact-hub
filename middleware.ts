@@ -2,6 +2,11 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // Guard upload page only — check path before touching Supabase
+  if (request.nextUrl.pathname !== '/artifacts/upload') {
+    return NextResponse.next({ request })
+  }
+
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -30,6 +35,7 @@ export async function middleware(request: NextRequest) {
   return response
 }
 
+// Broad matcher so Turbopack can't ignore it; path check above is the real guard
 export const config = {
-  matcher: ['/artifacts/upload'],
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico).*)'],
 }
