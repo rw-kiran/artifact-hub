@@ -21,7 +21,7 @@ async function isAuthorized(req: Request): Promise<boolean> {
     .is('revoked_at', null)
     .single()
   if (data) {
-    supabase.from('mcp_api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', data.id)
+    await supabase.from('mcp_api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', data.id)
   }
   return !!data
 }

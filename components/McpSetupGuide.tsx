@@ -2,12 +2,11 @@
 
 import { useState } from 'react'
 
-type Tab = 'claude' | 'cursor' | 'chatgpt'
+type Tab = 'claude' | 'cursor'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://your-app.vercel.app'
 
-function snippet(tab: Tab) {
-  if (tab === 'chatgpt') return null
+function snippet() {
   return JSON.stringify(
     {
       mcpServers: {
@@ -31,10 +30,9 @@ export function McpSetupGuide() {
   const [tab, setTab] = useState<Tab>('claude')
   const [copied, setCopied] = useState(false)
 
-  const code = snippet(tab)
+  const code = snippet()
 
   async function copy() {
-    if (!code) return
     await navigator.clipboard.writeText(code).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -43,7 +41,6 @@ export function McpSetupGuide() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'claude', label: 'Claude Desktop' },
     { id: 'cursor', label: 'Cursor' },
-    { id: 'chatgpt', label: 'ChatGPT' },
   ]
 
   return (
@@ -75,7 +72,7 @@ export function McpSetupGuide() {
               {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
-          <p className="text-xs text-gray-500">Replace <code className="bg-gray-100 px-1 rounded">YOUR_API_KEY</code> with the key you created above, then fully restart Claude Desktop.</p>
+          <p className="text-xs text-gray-500">Replace <code className="bg-gray-100 px-1 rounded">YOUR_API_KEY</code> with a key from above (use the Copy button), then fully restart Claude Desktop.</p>
         </div>
       )}
 
@@ -90,14 +87,7 @@ export function McpSetupGuide() {
               {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
-          <p className="text-xs text-gray-500">Replace <code className="bg-gray-100 px-1 rounded">YOUR_API_KEY</code> with the key you created above, then restart Cursor.</p>
-        </div>
-      )}
-
-      {tab === 'chatgpt' && (
-        <div className="space-y-3 text-sm text-gray-700">
-          <p>ChatGPT doesn't currently support MCP natively.</p>
-          <p className="text-gray-500">Use Claude Desktop or Cursor instead — both support the MCP protocol and work with the config above.</p>
+          <p className="text-xs text-gray-500">Replace <code className="bg-gray-100 px-1 rounded">YOUR_API_KEY</code> with a key from above, then restart Cursor.</p>
         </div>
       )}
     </div>

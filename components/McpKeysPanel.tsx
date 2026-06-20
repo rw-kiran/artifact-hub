@@ -8,7 +8,7 @@ export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
   const [name, setName] = useState('')
   const [newKey, setNewKey] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function createKey() {
@@ -23,7 +23,7 @@ export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
       if (!res.ok) throw new Error('Failed to create key')
       const { key, meta } = await res.json()
       setNewKey(key)
-      setKeys(prev => [meta, ...prev])
+      setKeys(prev => [{ ...meta, key_raw: key }, ...prev])
       setName('')
     } catch {
       setError('Failed to create key. Please try again.')
@@ -35,16 +35,13 @@ export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
   async function revokeKey(id: string) {
     setKeys(prev => prev.filter(k => k.id !== id))
     const res = await fetch(`/api/mcp-keys/${id}`, { method: 'DELETE' })
-    if (!res.ok) {
-      setError('Failed to revoke key.')
-    }
+    if (!res.ok) setError('Failed to revoke key.')
   }
 
-  async function copyKey() {
-    if (!newKey) return
-    await navigator.clipboard.writeText(newKey).catch(() => {})
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  async function copyToClipboard(text: string, id: string) {
+    await navigator.clipboard.writeText(text).catch(() => {})
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
   }
 
   return (
@@ -52,24 +49,24 @@ export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
       {newKey && (
         <div className="border border-red-200 bg-red-50 rounded-lg p-4 space-y-3">
           <p className="text-sm font-medium text-red-800">
-            Save this key now — it will not be shown again.
+            Key created — you can always copy it from the list below.
           </p>
           <div className="flex items-center gap-2">
             <pre className="flex-1 text-xs bg-white border border-red-200 rounded p-2 overflow-x-auto">
               {newKey}
             </pre>
             <button
-              onClick={copyKey}
+              onClick={() => copyToClipboard(newKey, 'new')}
               className="text-xs px-3 py-2 bg-red-800 text-white rounded hover:bg-red-700 shrink-0"
             >
-              {copied ? 'Copied!' : 'Copy'}
+              {copiedId === 'new' ? 'Copied!' : 'Copy'}
             </button>
           </div>
           <button
             onClick={() => setNewKey(null)}
             className="text-xs text-red-600 underline hover:text-red-800"
           >
-            I've saved it — dismiss
+            Dismiss
           </button>
         </div>
       )}
@@ -100,12 +97,12 @@ export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
       ) : (
         <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
           {keys.map(k => (
-            <div key={k.id} className="flex items-center justify-between px-4 py-3 gap-4">
-              <div className="min-w-0">
+            <div key={k.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <p className="text-sm font-medium truncate">{k.name}</p>
-                <p className="text-xs text-gray-400 font-mono">{k.key_prefix}••••••••••••••••••••••••••••••••••••••••••••••••••••••••••</p>
+                <p className="text-xs text-gray-400 font-mono truncate">{k.key_prefix}{'•'.repeat(28)}</p>
               </div>
-              <div className="text-right shrink-0 space-y-0.5">
+              <div className="text-right shrink-0 space-y-0.5 whitespace-nowrap">
                 <p className="text-xs text-gray-400">
                   Created {new Date(k.created_at).toLocaleDateString()}
                 </p>
@@ -115,6 +112,14 @@ export function McpKeysPanel({ initialKeys }: { initialKeys: McpApiKey[] }) {
                     : 'Never used'}
                 </p>
               </div>
+              {k.key_raw && (
+                <button
+                  onClick={() => copyToClipboard(k.key_raw!, k.id)}
+                  className="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50 shrink-0"
+                >
+                  {copiedId === k.id ? 'Copied!' : 'Copy'}
+                </button>
+              )}
               <button
                 onClick={() => revokeKey(k.id)}
                 className="text-xs text-red-500 hover:text-red-700 shrink-0"

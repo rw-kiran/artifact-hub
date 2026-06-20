@@ -97,21 +97,57 @@ mcpServer.addTool({
 
 mcpServer.addTool({
   name: 'get_artifact',
-  description: 'Get full details of an artifact including its feedback. Use list_artifacts() to find artifact IDs.',
+  description: 'Get details of an artifact including feedback. Accepts an exact ID, or searches by title/tags when the ID is unknown. If multiple artifacts match, returns a candidate list — ask the user which one they mean, then call again with the specific id.',
   parameters: z.object({
-    id: z.string().uuid().describe('Artifact ID'),
+    id: z.string().uuid().optional().describe('Exact artifact ID (fastest path)'),
+    title: z.string().optional().describe('Partial title to search for'),
+    tags: z.array(z.string()).optional().describe('Tags to filter by'),
   }),
-  execute: async ({ id }) => {
+  execute: async ({ id, title, tags }) => {
     const supabase = createServerSupabaseClient()
-    const [artifactRes, feedbackRes] = await Promise.all([
-      supabase.from('artifacts').select('*').eq('id', id).single(),
-      supabase.from('feedback').select('*').eq('artifact_id', id).order('created_at', { ascending: true }),
-    ])
 
-    if (artifactRes.error || !artifactRes.data) {
-      return `Artifact not found. Call list_artifacts() to see available IDs.`
+    if (id) {
+      const [artifactRes, feedbackRes] = await Promise.all([
+        supabase.from('artifacts').select('*').eq('id', id).single(),
+        supabase.from('feedback').select('*').eq('artifact_id', id).order('created_at', { ascending: true }),
+      ])
+      if (artifactRes.error || !artifactRes.data) {
+        return `Artifact not found for id "${id}". Try searching by title or tags instead.`
+      }
+      return JSON.stringify({ ...artifactRes.data, feedback: feedbackRes.data ?? [] })
     }
-    return JSON.stringify({ ...artifactRes.data, feedback: feedbackRes.data ?? [] })
+
+    if (!title && (!tags || !tags.length)) {
+      return 'Please provide an id, title, or tags to identify the artifact.'
+    }
+
+    let q = supabase
+      .from('artifacts')
+      .select('id, title, type, tags, description, created_at, blob_url')
+      .eq('visibility', 'public')
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    if (title) q = q.ilike('title', `%${title.replace(/[%_]/g, '\\$&')}%`)
+    if (tags?.length) q = q.contains('tags', tags)
+
+    const { data, error } = await q
+    if (error) return `Search failed: ${error.message}`
+    if (!data?.length) return `No artifacts found. Try different terms or use list_artifacts() to browse all.`
+
+    if (data.length === 1) {
+      const [artifactRes, feedbackRes] = await Promise.all([
+        supabase.from('artifacts').select('*').eq('id', data[0].id).single(),
+        supabase.from('feedback').select('*').eq('artifact_id', data[0].id).order('created_at', { ascending: true }),
+      ])
+      return JSON.stringify({ ...artifactRes.data, feedback: feedbackRes.data ?? [] })
+    }
+
+    // Multiple matches — surface them and ask the user to pick
+    return JSON.stringify({
+      message: `Found ${data.length} artifacts matching your search. Ask the user which one they mean, then call get_artifact with the specific id.`,
+      candidates: data.map(a => ({ id: a.id, title: a.title, type: a.type, tags: a.tags })),
+    })
   },
 })
 
@@ -146,23 +182,48 @@ mcpServer.addTool({
 
 mcpServer.addTool({
   name: 'share_artifact',
-  description: 'Create a time-limited shareable link for an artifact. The link works for anyone, no login required.',
+  description: 'Create a time-limited shareable link for an artifact. Provide artifact_id for a direct share, or use query to search by title. If the query matches multiple artifacts, a candidate list is returned — ask the user to pick one, then call again with the specific artifact_id.',
   parameters: z.object({
-    artifact_id: z.string().uuid().describe('Artifact ID to share'),
+    artifact_id: z.string().uuid().optional().describe('Exact artifact ID to share'),
+    query: z.string().optional().describe('Search term to find an artifact by title when the ID is unknown'),
     expires_in_hours: z.number().int().min(1).max(168).default(24).describe('Link validity in hours (max 168 = 7 days)'),
   }),
-  execute: async ({ artifact_id, expires_in_hours }) => {
+  execute: async ({ artifact_id, query, expires_in_hours }) => {
     const supabase = createServerSupabaseClient()
+    let id = artifact_id
+
+    if (!id) {
+      if (!query) return 'Please provide either artifact_id or a query to find the artifact.'
+
+      const escaped = query.replace(/[%_]/g, '\\$&')
+      const { data } = await supabase
+        .from('artifacts')
+        .select('id, title, type, tags')
+        .eq('visibility', 'public')
+        .ilike('title', `%${escaped}%`)
+        .limit(10)
+
+      if (!data?.length) return `No artifacts found matching "${query}". Use list_artifacts() to browse.`
+
+      if (data.length > 1) {
+        return JSON.stringify({
+          message: `Found ${data.length} artifacts matching "${query}". Ask the user which one they want to share, then call share_artifact with the specific artifact_id.`,
+          candidates: data,
+        })
+      }
+      id = data[0].id
+    }
+
     const hours = expires_in_hours ?? 24
     const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
 
     const { data, error } = await supabase
       .from('share_tokens')
-      .insert({ artifact_id, expires_at: expiresAt })
+      .insert({ artifact_id: id, expires_at: expiresAt })
       .select('token')
       .single()
 
-    if (error) return `Failed to create share link: ${error.message}. Check the artifact ID with get_artifact().`
+    if (error) return `Failed to create share link: ${error.message}. Verify the artifact ID with get_artifact().`
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
     return JSON.stringify({ url: `${appUrl}/share/${data.token}`, expires_in_hours: hours, expires_at: expiresAt })
   },

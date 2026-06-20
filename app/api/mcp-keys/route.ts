@@ -22,7 +22,7 @@ export async function GET() {
   const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
     .from('mcp_api_keys')
-    .select('id, name, key_prefix, created_at, last_used_at')
+    .select('id, name, key_prefix, key_raw, created_at, last_used_at')
     .eq('user_id', user.id)
     .is('revoked_at', null)
     .order('created_at', { ascending: false })
@@ -50,8 +50,8 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
     .from('mcp_api_keys')
-    .insert({ user_id: user.id, name: result.data.name, key_prefix: prefix, key_hash: hash })
-    .select('id, name, key_prefix, created_at')
+    .insert({ user_id: user.id, name: result.data.name, key_prefix: prefix, key_hash: hash, key_raw: raw })
+    .select('id, name, key_prefix, key_raw, created_at')
     .single()
 
   if (error) return Response.json({ error: 'Failed to create key', code: 'DB_ERROR' }, { status: 500 })
