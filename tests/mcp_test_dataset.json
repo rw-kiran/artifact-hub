@@ -1,0 +1,957 @@
+{
+  "meta": {
+    "title": "Artifact Hub MCP \u2014 Test Dataset",
+    "version": "1.0.0",
+    "date": "2026-06-20",
+    "description": "Covers single-tool, 2-step chains, multi-step flows, and human-in-the-loop (ambiguous input) scenarios for all 7 MCP tools.",
+    "tools": [
+      "publish_artifact",
+      "list_artifacts",
+      "get_artifact",
+      "search_artifacts",
+      "share_artifact",
+      "add_feedback",
+      "summarize_feedback"
+    ],
+    "fixture_ids": {
+      "pikachu_artifact_id": "dde2be96-3cec-4495-8cab-c56346c8b9f7",
+      "sample_pdf_artifact_id": "1047fdb5-b5ca-453d-b5ef-fed5c0c1bd35",
+      "html_test_artifact_id": "5dcbde19-efca-4d34-b06d-9404ffd30f23",
+      "nonexistent_artifact_id": "00000000-0000-0000-0000-000000000000",
+      "valid_image_url": "https://static.wikia.nocookie.net/pyruslords/images/7/77/Pikachu.png/revision/latest?cb=20131216222538",
+      "valid_html_url": "https://exampleblog.com/what-is-a-blog-a-simple-guide-to-understanding-blogs/",
+      "bot_blocked_url": "https://fanonlords.fandom.com/wiki/Pokemon_Pictures_for_Pokemon_Parts",
+      "unsupported_type_url": "https://www.w3.org/WAI/WCAG21/wcag-2.1.xml"
+    }
+  },
+  "single_tool": [
+    {
+      "id": "PA-1",
+      "tool": "publish_artifact",
+      "label": "Happy path \u2014 image with all fields",
+      "input": {
+        "url": "{{valid_image_url}}",
+        "title": "Pikachu Full Art",
+        "description": "Official Pikachu artwork from the Pokemon franchise",
+        "tags": [
+          "pokemon",
+          "pikachu",
+          "art"
+        ],
+        "visibility": "public"
+      },
+      "expected": {
+        "outcome": "success",
+        "response_contains": [
+          "id",
+          "title",
+          "type",
+          "url"
+        ],
+        "type": "image"
+      },
+      "notes": "Baseline happy-path. Confirms image MIME detection and Vercel Blob upload."
+    },
+    {
+      "id": "PA-2",
+      "tool": "publish_artifact",
+      "label": "Missing description \u2014 NOT NULL violation",
+      "input": {
+        "url": "{{valid_image_url}}",
+        "title": "Pikachu No Desc"
+      },
+      "expected": {
+        "outcome": "success"
+      },
+      "notes": "description defaults to empty string in execute() \u2014 DB constraint never hit."
+    },
+    {
+      "id": "PA-3",
+      "tool": "publish_artifact",
+      "label": "Bot-blocked URL \u2014 HTTP 403",
+      "input": {
+        "url": "{{bot_blocked_url}}",
+        "title": "Fandom Page",
+        "description": "Should fail with 403"
+      },
+      "expected": {
+        "outcome": "error",
+        "error_contains": "HTTP 403",
+        "edge_case": "EC-1"
+      },
+      "notes": "Fandom blocks server-side fetches. Exposes lack of User-Agent header in fetch()."
+    },
+    {
+      "id": "PA-4",
+      "tool": "publish_artifact",
+      "label": "Unsupported MIME type",
+      "input": {
+        "url": "{{unsupported_type_url}}",
+        "title": "XML File",
+        "description": "Should reject non-allowed MIME"
+      },
+      "expected": {
+        "outcome": "error"
+      },
+      "notes": "Validates MIME allowlist (html, image/*, application/pdf only).",
+      "fixture_note": "unsupported_type_url returns 404 before MIME check; use a URL that actually serves a non-allowed MIME type to exercise that branch"
+    },
+    {
+      "id": "PA-5",
+      "tool": "publish_artifact",
+      "label": "Private visibility",
+      "input": {
+        "url": "{{valid_image_url}}",
+        "title": "Private Pikachu",
+        "description": "Should not appear in public list_artifacts",
+        "visibility": "private"
+      },
+      "expected": {
+        "outcome": "success",
+        "visibility": "private"
+      },
+      "notes": "Verify private artifacts are excluded from list_artifacts (which filters visibility=public)."
+    },
+    {
+      "id": "LA-1",
+      "tool": "list_artifacts",
+      "label": "No filters \u2014 all public artifacts",
+      "input": {},
+      "expected": {
+        "outcome": "success",
+        "min_results": 1,
+        "all_visibility": "public"
+      },
+      "notes": "Baseline. All returned records must have visibility=public."
+    },
+    {
+      "id": "LA-2",
+      "tool": "list_artifacts",
+      "label": "Filter by type=image",
+      "input": {
+        "type": "image"
+      },
+      "expected": {
+        "outcome": "success",
+        "all_type": "image"
+      },
+      "notes": "Every returned artifact must be type=image."
+    },
+    {
+      "id": "LA-3",
+      "tool": "list_artifacts",
+      "label": "Filter by tag=pokemon",
+      "input": {
+        "tag": "pokemon"
+      },
+      "expected": {
+        "outcome": "success",
+        "all_tags_contain": "pokemon"
+      },
+      "notes": "Uses Postgres array contains. Verify tags[] column includes 'pokemon'."
+    },
+    {
+      "id": "LA-4",
+      "tool": "list_artifacts",
+      "label": "Tag with no matches",
+      "input": {
+        "tag": "nonexistent-tag-xyz"
+      },
+      "expected": {
+        "outcome": "empty",
+        "response": "No artifacts found."
+      },
+      "notes": "Tool returns the string 'No artifacts found.' on empty result."
+    },
+    {
+      "id": "LA-5",
+      "tool": "list_artifacts",
+      "label": "Limit=1 returns single artifact",
+      "input": {
+        "limit": 1
+      },
+      "expected": {
+        "outcome": "success",
+        "result_count": 1
+      },
+      "notes": "Most recent artifact only. Confirms ORDER BY created_at DESC + LIMIT."
+    },
+    {
+      "id": "GA-1",
+      "tool": "get_artifact",
+      "label": "Valid UUID \u2014 Pikachu",
+      "input": {
+        "id": "{{pikachu_artifact_id}}"
+      },
+      "expected": {
+        "outcome": "success",
+        "response_contains": [
+          "id",
+          "title",
+          "blob_url",
+          "feedback"
+        ]
+      },
+      "notes": "Also exposes inputSchema serialization bug: id param may not reach execute() due to empty properties schema."
+    },
+    {
+      "id": "GA-2",
+      "tool": "get_artifact",
+      "label": "Non-existent UUID",
+      "input": {
+        "id": "{{nonexistent_artifact_id}}"
+      },
+      "expected": {
+        "outcome": "not_found",
+        "response_contains": "Artifact not found"
+      },
+      "notes": "Should return helpful 'Call list_artifacts()' hint, not a raw DB error."
+    },
+    {
+      "id": "GA-3",
+      "tool": "get_artifact",
+      "label": "Invalid UUID format",
+      "input": {
+        "id": "not-a-uuid"
+      },
+      "expected": {
+        "outcome": "error",
+        "error_type": "zod_validation"
+      },
+      "notes": "Zod z.string().uuid() should reject this before DB call."
+    },
+    {
+      "id": "SA-1",
+      "tool": "search_artifacts",
+      "label": "Keyword matching title",
+      "input": {
+        "query": "Pikachu"
+      },
+      "expected": {
+        "outcome": "success",
+        "min_results": 1,
+        "result_contains_title": "Pikachu"
+      },
+      "notes": "ILIKE match on title column."
+    },
+    {
+      "id": "SA-2",
+      "tool": "search_artifacts",
+      "label": "Keyword matching description",
+      "input": {
+        "query": "Pokemon franchise"
+      },
+      "expected": {
+        "outcome": "success",
+        "min_results": 1
+      },
+      "notes": "ILIKE match on description column."
+    },
+    {
+      "id": "SA-3",
+      "tool": "search_artifacts",
+      "label": "No results",
+      "input": {
+        "query": "zzznomatchxyz"
+      },
+      "expected": {
+        "outcome": "empty",
+        "response_contains": "No artifacts found"
+      }
+    },
+    {
+      "id": "SA-4",
+      "tool": "search_artifacts",
+      "label": "ILIKE special chars \u2014 SQL safety",
+      "input": {
+        "query": "100% real' OR '1'='1"
+      },
+      "expected": {
+        "outcome": "empty_or_safe",
+        "must_not": "SQL injection or DB error"
+      },
+      "notes": "Query is escaped with replace(/[%_]/g, '\\\\$&'). Verifies % and _ are neutralised."
+    },
+    {
+      "id": "SA-5",
+      "tool": "search_artifacts",
+      "label": "Keyword + type filter",
+      "input": {
+        "query": "Pikachu",
+        "type": "image"
+      },
+      "expected": {
+        "outcome": "success",
+        "all_type": "image"
+      },
+      "notes": "Combination filter: keyword AND type. All results must be type=image."
+    },
+    {
+      "id": "SH-1",
+      "tool": "share_artifact",
+      "label": "Default expiry (24h)",
+      "input": {
+        "artifact_id": "{{pikachu_artifact_id}}"
+      },
+      "expected": {
+        "outcome": "success",
+        "response_contains": [
+          "url",
+          "expires_in_hours",
+          "expires_at"
+        ],
+        "expires_in_hours": 24
+      }
+    },
+    {
+      "id": "SH-2",
+      "tool": "share_artifact",
+      "label": "Max expiry (168h = 7 days)",
+      "input": {
+        "artifact_id": "{{pikachu_artifact_id}}",
+        "expires_in_hours": 168
+      },
+      "expected": {
+        "outcome": "success",
+        "expires_in_hours": 168
+      }
+    },
+    {
+      "id": "SH-3",
+      "tool": "share_artifact",
+      "label": "Min expiry (1h)",
+      "input": {
+        "artifact_id": "{{pikachu_artifact_id}}",
+        "expires_in_hours": 1
+      },
+      "expected": {
+        "outcome": "success",
+        "expires_in_hours": 1
+      }
+    },
+    {
+      "id": "SH-4",
+      "tool": "share_artifact",
+      "label": "Non-existent artifact_id",
+      "input": {
+        "artifact_id": "{{nonexistent_artifact_id}}"
+      },
+      "expected": {
+        "outcome": "error",
+        "error_contains": "list_artifacts"
+      },
+      "notes": "DB FK violation or empty insert. Should return helpful error, not raw Supabase stack."
+    },
+    {
+      "id": "AF-1",
+      "tool": "add_feedback",
+      "label": "Comment with 5-star rating",
+      "input": {
+        "artifact_id": "{{pikachu_artifact_id}}",
+        "content": "Amazing Pikachu artwork, very clean lines!",
+        "rating": 5,
+        "author_name": "Test User"
+      },
+      "expected": {
+        "outcome": "success",
+        "response_contains": [
+          "id",
+          "created_at"
+        ]
+      }
+    },
+    {
+      "id": "AF-2",
+      "tool": "add_feedback",
+      "label": "Comment without rating",
+      "input": {
+        "artifact_id": "{{pikachu_artifact_id}}",
+        "content": "Nice image overall, would love a higher resolution version."
+      },
+      "expected": {
+        "outcome": "success"
+      },
+      "notes": "rating is optional. DB column should allow NULL."
+    },
+    {
+      "id": "AF-3",
+      "tool": "add_feedback",
+      "label": "Content too short \u2014 below 10 char minimum",
+      "input": {
+        "artifact_id": "{{pikachu_artifact_id}}",
+        "content": "Good",
+        "rating": 4
+      },
+      "expected": {
+        "outcome": "error",
+        "error_type": "zod_validation",
+        "error_contains": "min"
+      },
+      "notes": "z.string().min(10) should reject 'Good' (4 chars)."
+    },
+    {
+      "id": "AF-4",
+      "tool": "add_feedback",
+      "label": "Content at exact minimum (10 chars)",
+      "input": {
+        "artifact_id": "{{pikachu_artifact_id}}",
+        "content": "Looks good!",
+        "rating": 3
+      },
+      "expected": {
+        "outcome": "success"
+      },
+      "notes": "'Looks good!' is 11 chars \u2014 should pass. Test boundary at exactly 10 chars too."
+    },
+    {
+      "id": "AF-5",
+      "tool": "add_feedback",
+      "label": "Invalid artifact_id",
+      "input": {
+        "artifact_id": "{{nonexistent_artifact_id}}",
+        "content": "This artifact does not exist, feedback should fail.",
+        "rating": 1
+      },
+      "expected": {
+        "outcome": "error",
+        "error_contains": "list_artifacts"
+      },
+      "notes": "FK constraint or empty result. Should give helpful hint."
+    },
+    {
+      "id": "SF-1",
+      "tool": "summarize_feedback",
+      "label": "Artifact with existing feedback",
+      "input": {
+        "artifact_id": "{{pikachu_artifact_id}}"
+      },
+      "expected": {
+        "outcome": "success_or_prompt",
+        "notes": "Returns feedback_summary if set, or 'Add 3 or more comments' prompt if null."
+      }
+    },
+    {
+      "id": "SF-2",
+      "tool": "summarize_feedback",
+      "label": "Artifact with no feedback summary",
+      "input": {
+        "artifact_id": "{{html_test_artifact_id}}"
+      },
+      "expected": {
+        "outcome": "prompt",
+        "response_contains": "Add 3 or more comments"
+      }
+    },
+    {
+      "id": "SF-3",
+      "tool": "summarize_feedback",
+      "label": "Non-existent artifact",
+      "input": {
+        "artifact_id": "{{nonexistent_artifact_id}}"
+      },
+      "expected": {
+        "outcome": "not_found",
+        "response_contains": "Artifact not found"
+      }
+    }
+  ],
+  "two_step_chains": [
+    {
+      "id": "C1",
+      "label": "Publish then immediately share",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "publish_artifact",
+          "input": {
+            "url": "{{valid_image_url}}",
+            "title": "Chain Test Image",
+            "description": "Published as part of C1 chain test",
+            "tags": [
+              "chain-test"
+            ],
+            "visibility": "public"
+          },
+          "capture": {
+            "artifact_id": "$.id"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "share_artifact",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "expires_in_hours": 48
+          },
+          "expected": {
+            "outcome": "success",
+            "response_contains": [
+              "url",
+              "expires_at"
+            ]
+          }
+        }
+      ],
+      "validates": "Full publish-to-share lifecycle with dynamic ID threading."
+    },
+    {
+      "id": "C2",
+      "label": "Publish then add feedback",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "publish_artifact",
+          "input": {
+            "url": "{{valid_image_url}}",
+            "title": "Feedback Chain Test",
+            "description": "Target for immediate feedback",
+            "tags": [
+              "feedback-test"
+            ]
+          },
+          "capture": {
+            "artifact_id": "$.id"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "add_feedback",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "content": "Freshly published and already leaving feedback!",
+            "rating": 4
+          },
+          "expected": {
+            "outcome": "success"
+          }
+        }
+      ],
+      "validates": "Feedback can be added immediately after publish (no async delay needed)."
+    },
+    {
+      "id": "C3",
+      "label": "List then drill into artifact",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "list_artifacts",
+          "input": {
+            "type": "image",
+            "limit": 1
+          },
+          "capture": {
+            "artifact_id": "$[0].id"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "get_artifact",
+          "input": {
+            "id": "{{artifact_id}}"
+          },
+          "expected": {
+            "outcome": "success",
+            "response_contains": [
+              "feedback"
+            ]
+          }
+        }
+      ],
+      "validates": "list \u2192 get flow. Also surfaces inputSchema serialization bug if id is dropped."
+    },
+    {
+      "id": "C4",
+      "label": "Search then share result",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "search_artifacts",
+          "input": {
+            "query": "Pikachu",
+            "type": "image"
+          },
+          "capture": {
+            "artifact_id": "$[0].id"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "share_artifact",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "expires_in_hours": 24
+          },
+          "expected": {
+            "outcome": "success"
+          }
+        }
+      ],
+      "validates": "Discover-by-keyword \u2192 share. Realistic user flow."
+    },
+    {
+      "id": "C5",
+      "label": "Add feedback then check summary",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "add_feedback",
+          "input": {
+            "artifact_id": "{{pikachu_artifact_id}}",
+            "content": "This is excellent artwork, very vibrant colors.",
+            "rating": 5
+          },
+          "expected": {
+            "outcome": "success"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "summarize_feedback",
+          "input": {
+            "artifact_id": "{{pikachu_artifact_id}}"
+          },
+          "expected": {
+            "outcome": "success_or_prompt",
+            "notes": "Summary only auto-generates in Phase 5. Until then, expect the 'Add 3 or more comments' prompt."
+          }
+        }
+      ],
+      "validates": "Feedback \u2192 summary trigger. Tests the Phase 5 summarization gate."
+    },
+    {
+      "id": "C6",
+      "label": "List filtered by tag then share",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "list_artifacts",
+          "input": {
+            "tag": "pokemon"
+          },
+          "capture": {
+            "artifact_id": "$[0].id"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "share_artifact",
+          "input": {
+            "artifact_id": "{{artifact_id}}"
+          },
+          "expected": {
+            "outcome": "success"
+          }
+        }
+      ],
+      "validates": "Tag-filtered browse \u2192 share. Confirms tag filter returns correct artifacts."
+    }
+  ],
+  "multi_step_flows": [
+    {
+      "id": "F1",
+      "label": "Full content lifecycle: publish \u2192 3\u00d7 feedback \u2192 summarize",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "publish_artifact",
+          "input": {
+            "url": "{{valid_image_url}}",
+            "title": "Lifecycle Test Artifact",
+            "description": "Used to test the full feedback-to-summary pipeline",
+            "tags": [
+              "lifecycle",
+              "test"
+            ]
+          },
+          "capture": {
+            "artifact_id": "$.id"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "add_feedback",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "content": "First comment: the colors are really vibrant and eye-catching.",
+            "rating": 5
+          }
+        },
+        {
+          "step": 3,
+          "tool": "add_feedback",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "content": "Second comment: background could use more detail.",
+            "rating": 3
+          }
+        },
+        {
+          "step": 4,
+          "tool": "add_feedback",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "content": "Third comment: overall a solid piece, would share with friends.",
+            "rating": 4
+          }
+        },
+        {
+          "step": 5,
+          "tool": "summarize_feedback",
+          "input": {
+            "artifact_id": "{{artifact_id}}"
+          },
+          "expected": {
+            "outcome": "summary_or_prompt",
+            "notes": "With 3 comments present, Phase 5 should generate a summary. Pre-Phase-5: still returns prompt."
+          }
+        }
+      ],
+      "validates": "End-to-end publish \u2192 feedback accumulation \u2192 AI summary trigger. Key lifecycle test."
+    },
+    {
+      "id": "F2",
+      "label": "Discovery flow: list \u2192 search \u2192 get \u2192 share",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "list_artifacts",
+          "input": {},
+          "notes": "Browse the catalog"
+        },
+        {
+          "step": 2,
+          "tool": "search_artifacts",
+          "input": {
+            "query": "Pikachu"
+          },
+          "capture": {
+            "artifact_id": "$[0].id"
+          }
+        },
+        {
+          "step": 3,
+          "tool": "get_artifact",
+          "input": {
+            "id": "{{artifact_id}}"
+          },
+          "notes": "Drill into the search result"
+        },
+        {
+          "step": 4,
+          "tool": "share_artifact",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "expires_in_hours": 72
+          },
+          "expected": {
+            "outcome": "success"
+          }
+        }
+      ],
+      "validates": "Full browse-discover-inspect-share flow. Mirrors realistic MCP client usage."
+    },
+    {
+      "id": "F3",
+      "label": "Publish \u2192 share \u2192 feedback \u2192 summarize",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "publish_artifact",
+          "input": {
+            "url": "{{valid_image_url}}",
+            "title": "F3 Flow Test",
+            "description": "Multi-step flow test artifact",
+            "tags": [
+              "flow-test"
+            ]
+          },
+          "capture": {
+            "artifact_id": "$.id"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "share_artifact",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "expires_in_hours": 24
+          },
+          "capture": {
+            "share_url": "$.url"
+          }
+        },
+        {
+          "step": 3,
+          "tool": "add_feedback",
+          "input": {
+            "artifact_id": "{{artifact_id}}",
+            "content": "Shared this with my team and they all loved it.",
+            "rating": 5
+          }
+        },
+        {
+          "step": 4,
+          "tool": "summarize_feedback",
+          "input": {
+            "artifact_id": "{{artifact_id}}"
+          }
+        }
+      ],
+      "validates": "Parallel publish+share branch joined with feedback pipeline."
+    },
+    {
+      "id": "F4",
+      "label": "Multi-artifact: list PDFs \u2192 share each \u2192 feedback on one",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "list_artifacts",
+          "input": {
+            "type": "pdf"
+          },
+          "capture": {
+            "pdf_artifact_id": "$[0].id"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "share_artifact",
+          "input": {
+            "artifact_id": "{{pdf_artifact_id}}",
+            "expires_in_hours": 48
+          },
+          "capture": {
+            "share_url": "$.url"
+          }
+        },
+        {
+          "step": 3,
+          "tool": "add_feedback",
+          "input": {
+            "artifact_id": "{{pdf_artifact_id}}",
+            "content": "Reviewed the PDF \u2014 well structured and clear content throughout.",
+            "rating": 4
+          }
+        },
+        {
+          "step": 4,
+          "tool": "summarize_feedback",
+          "input": {
+            "artifact_id": "{{pdf_artifact_id}}"
+          }
+        }
+      ],
+      "validates": "Type-filtered list feeds a full share+review sub-flow."
+    }
+  ],
+  "human_in_the_loop": [
+    {
+      "id": "H1",
+      "label": "Publish \u2014 no URL provided",
+      "user_message": "publish this image for me",
+      "ambiguity": "No URL given. publish_artifact requires a URL to fetch from.",
+      "expected_agent_behavior": "Ask: 'What is the URL of the image you want to publish?'",
+      "should_not_do": "Call publish_artifact with a null or guessed URL.",
+      "clarification_needed": [
+        "url"
+      ]
+    },
+    {
+      "id": "H2",
+      "label": "Share \u2014 ambiguous artifact reference",
+      "user_message": "share the pokemon one",
+      "ambiguity": "Multiple artifacts could match 'pokemon' (e.g. both Pikachu variants if more are added).",
+      "expected_agent_behavior": "Call list_artifacts or search_artifacts with query='pokemon', then present candidates and ask: 'Which one did you mean?'",
+      "should_not_do": "Assume the first result and share without confirming.",
+      "clarification_needed": [
+        "artifact_id"
+      ]
+    },
+    {
+      "id": "H3",
+      "label": "List \u2014 user implies private artifacts",
+      "user_message": "show me all my uploads including private ones",
+      "ambiguity": "list_artifacts only returns visibility=public. Private artifacts are not exposed.",
+      "expected_agent_behavior": "Explain the limitation and show public artifacts only. Suggest checking the Artifact Hub UI for private ones.",
+      "should_not_do": "Silently return only public results as if they are all results.",
+      "clarification_needed": []
+    },
+    {
+      "id": "H4",
+      "label": "Feedback \u2014 no artifact specified",
+      "user_message": "leave a 5 star review",
+      "ambiguity": "artifact_id is unknown. content is also missing.",
+      "expected_agent_behavior": "Ask: 'Which artifact would you like to review? And what would you like to say in your comment?'",
+      "should_not_do": "Call add_feedback with a guessed artifact_id.",
+      "clarification_needed": [
+        "artifact_id",
+        "content"
+      ]
+    },
+    {
+      "id": "H5",
+      "label": "Feedback \u2014 content too vague",
+      "user_message": "add feedback to the PDF saying it's good",
+      "ambiguity": "'it's good' is 9 chars \u2014 fails the 10-char minimum. Also, which PDF if multiple exist?",
+      "expected_agent_behavior": "Ask user to expand the comment (min 10 chars). If only one PDF exists, confirm it; otherwise ask which one.",
+      "should_not_do": "Submit 'it's good' and let the server reject it, without warning the user first.",
+      "clarification_needed": [
+        "content (too short)",
+        "artifact_id (if multiple PDFs)"
+      ]
+    },
+    {
+      "id": "H6",
+      "label": "Share \u2014 no artifact context",
+      "user_message": "make this shareable",
+      "ambiguity": "No prior artifact referenced. 'This' is undefined.",
+      "expected_agent_behavior": "Ask: 'Which artifact would you like to share? I can list them if you're not sure of the ID.'",
+      "should_not_do": "Call list_artifacts and pick the first one without asking.",
+      "clarification_needed": [
+        "artifact_id"
+      ]
+    },
+    {
+      "id": "H7",
+      "label": "Summarize \u2014 no artifact specified",
+      "user_message": "what's the feedback summary?",
+      "ambiguity": "artifact_id not specified.",
+      "expected_agent_behavior": "Ask: 'Which artifact's feedback summary would you like? I can list available artifacts.'",
+      "should_not_do": "Call summarize_feedback with a guessed or default ID.",
+      "clarification_needed": [
+        "artifact_id"
+      ]
+    },
+    {
+      "id": "H8",
+      "label": "Search \u2014 overly broad query",
+      "user_message": "search for stuff",
+      "ambiguity": "'stuff' will likely return no results or irrelevant ones.",
+      "expected_agent_behavior": "Ask: 'Can you be more specific? E.g. a title keyword, file type, or topic.' If user insists, run search_artifacts with query='stuff' and report results honestly.",
+      "should_not_do": "Refuse to search entirely.",
+      "clarification_needed": [
+        "query"
+      ]
+    },
+    {
+      "id": "H9",
+      "label": "Publish \u2014 URL that redirects to unsupported type",
+      "user_message": "publish this for me: https://example.com/video.mp4",
+      "ambiguity": "URL appears to be a video (.mp4) \u2014 not in the allowed MIME list. User may not know this is unsupported.",
+      "expected_agent_behavior": "Attempt publish_artifact. On 'Unsupported file type' error, explain allowed types (HTML, JPEG, PNG, GIF, WebP, PDF) and ask for a different URL.",
+      "should_not_do": "Silently fail without explaining why or what is supported.",
+      "clarification_needed": []
+    },
+    {
+      "id": "H10",
+      "label": "Share \u2014 expiry not specified, user wants 'forever'",
+      "user_message": "share the Pikachu image, make it never expire",
+      "ambiguity": "share_artifact has a max of 168h (7 days). 'Never expire' is not supported.",
+      "expected_agent_behavior": "Explain the 7-day maximum. Ask: 'Would you like me to set it to the maximum of 7 days (168 hours)?'",
+      "should_not_do": "Pass expires_in_hours > 168 (Zod will reject it) or silently cap at 168 without telling the user.",
+      "clarification_needed": [
+        "expires_in_hours"
+      ]
+    }
+  ]
+}

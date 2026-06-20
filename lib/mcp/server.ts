@@ -18,6 +18,17 @@ function mimeToType(mime: string): ArtifactType | null {
   return null
 }
 
+// ponytail: fastmcp/edge doesn't run Zod validation on inputs — guard manually where it matters
+function assertUuid(val: unknown, name: string): asserts val is string {
+  if (typeof val !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
+    throw new Error(`Invalid ${name}: "${val}". Expected a UUID (e.g. from list_artifacts()).`)
+  }
+}
+
+function isFkViolation(msg: string) {
+  return msg.includes('foreign key') || msg.includes('violates')
+}
+
 mcpServer.addTool({
   name: 'publish_artifact',
   description: 'Publish a new artifact to the hub from a remote URL. Supports HTML, images (JPEG, PNG, GIF, WebP), and PDFs up to 50 MB.',
@@ -32,11 +43,11 @@ mcpServer.addTool({
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ArtifactHub/1.0)' },
     })
-    if (!response.ok) return `Failed to fetch URL: HTTP ${response.status}`
+    if (!response.ok) throw new Error(`Failed to fetch URL: HTTP ${response.status}. The server rejected the request — try a direct CDN URL instead.`)
 
     const contentType = (response.headers.get('content-type') ?? '').split(';')[0].trim()
     if (!isAllowedMimeType(contentType)) {
-      return `Unsupported file type "${contentType}". Allowed: ${ALLOWED_MIME_TYPES.join(', ')}`
+      throw new Error(`Unsupported file type "${contentType}". Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}`)
     }
     const type = mimeToType(contentType)!
 
@@ -63,7 +74,7 @@ mcpServer.addTool({
       .select()
       .single()
 
-    if (error) return `Failed to create artifact: ${error.message}`
+    if (error) throw new Error(`Failed to save artifact: ${error.message}`)
     return JSON.stringify({ id: data.id, title: data.title, type: data.type, url: blobUrl, visibility: data.visibility })
   },
 })
@@ -89,7 +100,7 @@ mcpServer.addTool({
     if (tag) query = query.contains('tags', [tag])
 
     const { data, error } = await query
-    if (error) return `Failed to list artifacts: ${error.message}`
+    if (error) throw new Error(`Failed to list artifacts: ${error.message}`)
     if (!data?.length) return 'No artifacts found.'
     return JSON.stringify(data)
   },
@@ -99,7 +110,7 @@ mcpServer.addTool({
   name: 'get_artifact',
   description: 'Get details of an artifact including feedback. Accepts an exact ID, or searches by title/tags when the ID is unknown. If multiple artifacts match, returns a candidate list — ask the user which one they mean, then call again with the specific id.',
   parameters: z.object({
-    id: z.string().uuid().optional().describe('Exact artifact ID (fastest path)'),
+    id: z.string().optional().describe('Exact artifact UUID'),
     title: z.string().optional().describe('Partial title to search for'),
     tags: z.array(z.string()).optional().describe('Tags to filter by'),
   }),
@@ -107,6 +118,9 @@ mcpServer.addTool({
     const supabase = createServerSupabaseClient()
 
     if (id) {
+      // ponytail: fastmcp drops z.string().uuid() — validate manually
+      assertUuid(id, 'artifact_id')
+
       const [artifactRes, feedbackRes] = await Promise.all([
         supabase.from('artifacts').select('*').eq('id', id).single(),
         supabase.from('feedback').select('*').eq('artifact_id', id).order('created_at', { ascending: true }),
@@ -132,7 +146,7 @@ mcpServer.addTool({
     if (tags?.length) q = q.contains('tags', tags)
 
     const { data, error } = await q
-    if (error) return `Search failed: ${error.message}`
+    if (error) throw new Error(`Search failed: ${error.message}`)
     if (!data?.length) return `No artifacts found. Try different terms or use list_artifacts() to browse all.`
 
     if (data.length === 1) {
@@ -143,7 +157,6 @@ mcpServer.addTool({
       return JSON.stringify({ ...artifactRes.data, feedback: feedbackRes.data ?? [] })
     }
 
-    // Multiple matches — surface them and ask the user to pick
     return JSON.stringify({
       message: `Found ${data.length} artifacts matching your search. Ask the user which one they mean, then call get_artifact with the specific id.`,
       candidates: data.map(a => ({ id: a.id, title: a.title, type: a.type, tags: a.tags })),
@@ -174,7 +187,7 @@ mcpServer.addTool({
     if (type) q = q.eq('type', type)
 
     const { data, error } = await q
-    if (error) return `Search failed: ${error.message}`
+    if (error) throw new Error(`Search failed: ${error.message}`)
     if (!data?.length) return `No artifacts found for "${query}".`
     return JSON.stringify(data)
   },
@@ -184,7 +197,7 @@ mcpServer.addTool({
   name: 'share_artifact',
   description: 'Create a time-limited shareable link for an artifact. Provide artifact_id for a direct share, or use query to search by title. If the query matches multiple artifacts, a candidate list is returned — ask the user to pick one, then call again with the specific artifact_id.',
   parameters: z.object({
-    artifact_id: z.string().uuid().optional().describe('Exact artifact ID to share'),
+    artifact_id: z.string().optional().describe('Exact artifact UUID to share'),
     query: z.string().optional().describe('Search term to find an artifact by title when the ID is unknown'),
     expires_in_hours: z.number().int().min(1).max(168).default(24).describe('Link validity in hours (max 168 = 7 days)'),
   }),
@@ -192,7 +205,10 @@ mcpServer.addTool({
     const supabase = createServerSupabaseClient()
     let id = artifact_id
 
-    if (!id) {
+    if (id) {
+      // ponytail: fastmcp drops z.string().uuid() — validate manually
+      assertUuid(id, 'artifact_id')
+    } else {
       if (!query) return 'Please provide either artifact_id or a query to find the artifact.'
 
       const escaped = query.replace(/[%_]/g, '\\$&')
@@ -223,7 +239,12 @@ mcpServer.addTool({
       .select('token')
       .single()
 
-    if (error) return `Failed to create share link: ${error.message}. Verify the artifact ID with get_artifact().`
+    if (error) {
+      if (isFkViolation(error.message)) {
+        throw new Error(`Artifact not found. Use list_artifacts() to find valid artifact IDs.`)
+      }
+      throw new Error(`Failed to create share link: ${error.message}`)
+    }
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
     return JSON.stringify({ url: `${appUrl}/share/${data.token}`, expires_in_hours: hours, expires_at: expiresAt })
   },
@@ -233,13 +254,19 @@ mcpServer.addTool({
   name: 'add_feedback',
   description: 'Leave a comment on an artifact, with an optional 1–5 star rating.',
   parameters: z.object({
-    artifact_id: z.string().uuid().describe('Artifact ID to comment on'),
+    artifact_id: z.string().describe('Artifact ID to comment on'),
     content: z.string().min(10).max(1000).describe('Comment text (10–1000 characters)'),
     rating: z.number().int().min(1).max(5).optional().describe('Star rating (1 = worst, 5 = best)'),
     author_name: z.string().max(100).optional(),
     author_email: z.string().email().optional(),
   }),
   execute: async ({ artifact_id, content, rating, author_name, author_email }) => {
+    // ponytail: fastmcp drops Zod constraints — guard manually
+    assertUuid(artifact_id, 'artifact_id')
+    if (!content || content.length < 10) {
+      throw new Error(`Comment too short (${content?.length ?? 0} chars). Minimum is 10 characters.`)
+    }
+
     const supabase = createServerSupabaseClient()
     const { data, error } = await supabase
       .from('feedback')
@@ -253,7 +280,12 @@ mcpServer.addTool({
       .select('id, created_at')
       .single()
 
-    if (error) return `Failed to add feedback: ${error.message}. Verify the artifact ID with get_artifact().`
+    if (error) {
+      if (isFkViolation(error.message)) {
+        throw new Error(`Artifact not found. Use list_artifacts() to find valid artifact IDs.`)
+      }
+      throw new Error(`Failed to add feedback: ${error.message}`)
+    }
     return JSON.stringify({ id: data.id, created_at: data.created_at, message: 'Feedback added successfully.' })
   },
 })
@@ -262,9 +294,12 @@ mcpServer.addTool({
   name: 'summarize_feedback',
   description: 'Get the AI-generated summary of feedback for an artifact. Returns existing summary or a prompt to add more comments.',
   parameters: z.object({
-    artifact_id: z.string().uuid().describe('Artifact ID'),
+    artifact_id: z.string().describe('Artifact ID'),
   }),
   execute: async ({ artifact_id }) => {
+    // ponytail: fastmcp drops z.string().uuid() — validate manually
+    assertUuid(artifact_id, 'artifact_id')
+
     const supabase = createServerSupabaseClient()
     const { data, error } = await supabase
       .from('artifacts')
@@ -272,7 +307,7 @@ mcpServer.addTool({
       .eq('id', artifact_id)
       .single()
 
-    if (error || !data) return `Artifact not found. Call list_artifacts() to see available IDs.`
+    if (error || !data) throw new Error(`Artifact not found. Call list_artifacts() to see available IDs.`)
     // ponytail: Phase 5 calls summarizeFeedback() from lib/ai/claude.ts when feedback_summary is null
     if (!data.feedback_summary) {
       return `No summary yet for "${data.title}". Add 3 or more comments via add_feedback() to generate one.`
