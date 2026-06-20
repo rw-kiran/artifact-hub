@@ -18,8 +18,13 @@ export function createAuthClient(cookieStore: {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (cs: { name: string; value: string; options: CookieOptions }[]) =>
-          cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)),
+        setAll: (cs: { name: string; value: string; options: CookieOptions }[]) => {
+          try {
+            cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          } catch {
+            // Server Components can't set cookies — safe to ignore, tokens are refreshed in Route Handlers
+          }
+        },
       },
     },
   )
