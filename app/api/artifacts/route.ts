@@ -5,7 +5,7 @@ import { CreateArtifactSchema } from '@/lib/validation'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
+  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1)
   const type = searchParams.get('type')
   const tag = searchParams.get('tag')
   const q = searchParams.get('q')

@@ -2,7 +2,12 @@ import { put } from '@vercel/blob'
 import { isAllowedMimeType, MAX_FILE_SIZE_BYTES } from '@/lib/validation'
 
 export async function POST(request: Request) {
-  const formData = await request.formData()
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch {
+    return Response.json({ error: 'Expected multipart/form-data', code: 'MISSING_FILE' }, { status: 400 })
+  }
   const file = formData.get('file') as File | null
 
   if (!file) {
@@ -17,7 +22,7 @@ export async function POST(request: Request) {
 
   try {
     const pathname = `artifacts/${crypto.randomUUID()}/${file.name}`
-    const blob = await put(pathname, file, { access: 'public', contentType: file.type })
+    const blob = await put(pathname, file, { access: 'public', contentType: file.type, contentDisposition: 'inline' })
     return Response.json({ url: blob.url, pathname: blob.pathname, contentType: file.type })
   } catch (e) {
     console.error(JSON.stringify({ event: 'upload_error', error: e instanceof Error ? e.message : String(e) }))
