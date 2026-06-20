@@ -20,9 +20,12 @@ export function Nav() {
   }, [])
 
   async function handleSignOut() {
-    await fetch('/api/auth/signout', { method: 'POST' })
+    const supabase = getSupabaseBrowserClient()
+    await supabase.auth.signOut()
     router.refresh()
   }
+
+  const handle = user?.user_metadata?.user_name as string | undefined
 
   return (
     <nav className="flex items-center justify-between px-6 py-4 border-b bg-white">
@@ -32,7 +35,9 @@ export function Nav() {
       <div className="flex items-center gap-4">
         {user ? (
           <>
-            <span className="text-sm text-gray-600 hidden sm:block">{user.email}</span>
+            <span className="text-sm text-gray-600 hidden sm:block">
+              {handle ? `@${handle}` : user.email}
+            </span>
             <Link
               href="/artifacts/upload"
               className="text-sm font-medium bg-black text-white px-3 py-1.5 rounded-md hover:bg-gray-800"
