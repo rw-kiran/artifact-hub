@@ -1,0 +1,168 @@
+name: Seed Multi-Persona Feedback
+
+on:
+  workflow_dispatch:
+    inputs:
+      mcp_key:
+        description: 'MCP API key'
+        required: true
+        type: string
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Seed feedback via MCP
+        env:
+          MCP_KEY: ${{ inputs.mcp_key }}
+        run: |
+          node - <<'SCRIPT'
+          const MCP_URL = 'https://artifact-hub-steel.vercel.app/api/mcp'
+          const MCP_KEY = process.env.MCP_KEY
+
+          let requestId = 1
+
+          async function parseMcpResponse(res) {
+            const contentType = res.headers.get('content-type') || ''
+            const text = await res.text()
+            if (contentType.includes('text/event-stream')) {
+              const messages = []
+              for (const line of text.split('\n')) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6).trim()
+                  if (data && data !== '[DONE]') {
+                    try { messages.push(JSON.parse(data)) } catch {}
+                  }
+                }
+              }
+              return messages
+            }
+            try {
+              const json = JSON.parse(text)
+              return Array.isArray(json) ? json : [json]
+            } catch { return [] }
+          }
+
+          async function mcpPost(body, sessionId = null) {
+            const headers = {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${MCP_KEY}`,
+              'Accept': 'application/json, text/event-stream',
+            }
+            if (sessionId) headers['Mcp-Session-Id'] = sessionId
+            const res = await fetch(MCP_URL, { method: 'POST', headers, body: JSON.stringify(body) })
+            if (res.status === 401) throw new Error('Unauthorized')
+            if (res.status === 405) return { sessionId, messages: [] }
+            const newSessionId = res.headers.get('mcp-session-id') || sessionId
+            const messages = await parseMcpResponse(res)
+            return { sessionId: newSessionId, messages }
+          }
+
+          async function initSession() {
+            const { sessionId } = await mcpPost({
+              jsonrpc: '2.0', id: requestId++, method: 'initialize',
+              params: { protocolVersion: '2024-11-05', clientInfo: { name: 'seed', version: '1.0' }, capabilities: {} },
+            })
+            await mcpPost({ jsonrpc: '2.0', method: 'notifications/initialized' }, sessionId).catch(() => {})
+            return sessionId
+          }
+
+          async function callTool(sessionId, toolName, args) {
+            const id = requestId++
+            const { messages } = await mcpPost({
+              jsonrpc: '2.0', id, method: 'tools/call',
+              params: { name: toolName, arguments: args },
+            }, sessionId)
+            const response = messages.find(m => m.id === id)
+            if (!response) throw new Error(`No response for ${toolName}`)
+            if (response.error) throw new Error(`Tool error: ${JSON.stringify(response.error)}`)
+            const content = response.result?.content
+            if (!content || !content[0]) throw new Error(`Empty result from ${toolName}`)
+            try { return JSON.parse(content[0].text) } catch { return content[0].text }
+          }
+
+          const PERSONAS = [
+            { author_name: 'Alex Chen',      author_email: 'alex.chen@techreview.io', angle: 'technical' },
+            { author_name: 'Priya Sharma',   author_email: 'priya.s@designlab.co',    angle: 'design'    },
+            { author_name: 'Marcus Johnson', author_email: 'mjohnson@productco.com',  angle: 'product'   },
+            { author_name: 'Sarah Williams', author_email: 'sarah.w@devteam.io',      angle: 'developer' },
+            { author_name: 'Jordan Lee',     author_email: 'jordan.lee@creative.app', angle: 'creative'  },
+          ]
+
+          function getFeedback(artifact, angle) {
+            const title = artifact.title || 'this artifact'
+            const tags  = artifact.tags  || []
+            const type  = artifact.type  || 'html'
+            const tag1  = tags[0] || 'AI-generated'
+            const tag2  = tags[1] || 'content'
+            const sets = {
+              html: {
+                technical: { content: `Reviewed "${title}" with a focus on code quality. The HTML structure is semantic and the ${tag1} integration is handled cleanly. I'd suggest adding ARIA labels to interactive elements for better accessibility, and consolidating inline styles. Overall a solid technical foundation that's easy to extend.`, rating: 4 },
+                design:    { content: `"${title}" achieves a nice visual balance. The layout hierarchy guides the eye naturally and the color palette ties the ${tag1} theme together well. Typography is clean and legible. The only thing I'd refine is spacing on smaller viewports — a few sections feel tight below 768px. Otherwise polished and professional.`, rating: 5 },
+                product:   { content: `"${title}" clearly addresses a real ${tag1} use case and is ready to put in front of stakeholders immediately. I'd add a brief "how to use this" section for non-technical audiences. The core value proposition is obvious and fills a genuine gap in the ${tag2} workflow.`, rating: 4 },
+                developer: { content: `Dropped "${title}" into an existing ${tag1} project and integration was smooth — no unexpected dependencies, clean separation of concerns. Code is readable without needing comments. Would benefit from inline notes on the more non-obvious sections, but as a starting point for ${tag2} work this saves real time.`, rating: 4 },
+                creative:  { content: `"${title}" brings a distinct creative voice to ${tag1}. The narrative embedded in the UX is subtle but effective — users are guided without feeling directed. The ${tag2} theme gives the piece genuine personality. With a stronger visual hook at entry this would be truly memorable. Fresh thinking throughout.`, rating: 5 },
+              },
+              image: {
+                technical: { content: `Technically, "${title}" is well-executed. Resolution is sharp, color depth is excellent, and it scales cleanly across display sizes. The ${tag1} elements are rendered precisely with no compression artifacts. A vector export option would add versatility, but as a raster asset this is production-ready.`, rating: 4 },
+                design:    { content: `The composition in "${title}" is striking. Foreground and background create genuine depth and the ${tag1} color story feels intentional — not just decorative. Visual weight is distributed well, drawing focus exactly where it belongs. One of the stronger pieces in the ${tag2} category. The design communicates before the caption does.`, rating: 5 },
+                product:   { content: `"${title}" has clear commercial applicability. The visual style aligns with current ${tag1} trends and adapts well to marketing materials, presentations, or ${tag2} documentation. The consistent aesthetic lets it slot into different brand contexts with minimal adjustment.`, rating: 4 },
+                developer: { content: `From an integration standpoint, "${title}" works well for ${tag1} projects. The clean composition makes overlaying UI elements straightforward. Compression handles gracefully at different quality settings. My only ask would be a vector companion for full scalability, but as a raster asset for ${tag2} use this is reliable and high-quality.`, rating: 3 },
+                creative:  { content: `"${title}" doesn't just depict ${tag1} — it evokes a feeling. The lighting decisions and compositional tension tell a story without words. The ${tag2} theme is interpreted with genuine originality rather than going for the obvious angle. This is the kind of image that makes viewers stop mid-scroll.`, rating: 5 },
+              },
+              pdf: {
+                technical: { content: `"${title}" is technically sound from end to end. Heading hierarchy is proper, ${tag1} metadata is correctly embedded, cross-references resolve, and file size is well-optimized. Accessibility tags are present. This follows PDF best practices throughout and is easy to process programmatically.`, rating: 4 },
+                design:    { content: `The layout design in "${title}" shows real craft. The grid holds consistently, white space is used deliberately, and the ${tag1} visual elements complement rather than compete with the text. Typography pairing is excellent — hierarchy is clear at a glance. The reading experience feels intentional cover to close.`, rating: 5 },
+                product:   { content: `"${title}" achieves high information density without overwhelming the reader. The ${tag1} content is logically sequenced — this could go directly into ${tag2} onboarding decks or stakeholder reviews. The executive summary is a smart touch. Suggestion: add a concrete next-steps section at the end to increase actionability.`, rating: 4 },
+                developer: { content: `Critically, "${title}" uses embedded text layers rather than scanned images, making ${tag1} data extraction trivial. Tables parse cleanly and document structure is consistent enough to build ingestion pipelines on. A solid reference implementation for anyone processing ${tag2} documents programmatically.`, rating: 4 },
+                creative:  { content: `"${title}" treats the PDF as a canvas, not just a container. The ${tag1} narrative flows naturally through the document with visual moments that punctuate key ideas. The ${tag2} theme is woven through both content and design choices. Proof of how much creative impact a well-crafted PDF can deliver.`, rating: 5 },
+              },
+            }
+            const typeSet = sets[type] || sets.html
+            return typeSet[angle] || typeSet.technical
+          }
+
+          async function main() {
+            console.log('=== Artifact Hub Feedback Seeder ===\n')
+            const sessionId = await initSession()
+            console.log(`Session: ${sessionId ?? '(stateless)'}\n`)
+
+            const result = await callTool(sessionId, 'list_artifacts', { limit: 100 })
+            const artifacts = Array.isArray(result) ? result : []
+            if (artifacts.length === 0) { console.log('No public artifacts found.'); return }
+            console.log(`Found ${artifacts.length} artifact(s)\n`)
+
+            let totalFeedback = 0, totalErrors = 0
+
+            for (const artifact of artifacts) {
+              console.log(`[${(artifact.type||'').toUpperCase()}] "${artifact.title}" (${artifact.id})`)
+              for (const persona of PERSONAS) {
+                const { content, rating } = getFeedback(artifact, persona.angle)
+                try {
+                  await callTool(sessionId, 'add_feedback', {
+                    artifact_id: artifact.id, content, rating,
+                    author_name: persona.author_name, author_email: persona.author_email,
+                  })
+                  console.log(`  + ${persona.author_name} ${rating}* (${persona.angle})`)
+                  totalFeedback++
+                } catch (err) {
+                  console.log(`  ! ${persona.author_name} ERROR: ${err.message}`)
+                  totalErrors++
+                }
+                await new Promise(r => setTimeout(r, 200))
+              }
+              try {
+                const summary = await callTool(sessionId, 'summarize_feedback', { artifact_id: artifact.id })
+                const preview = (typeof summary === 'string' ? summary : JSON.stringify(summary)).slice(0, 120)
+                console.log(`  Summary: ${preview}`)
+              } catch (err) {
+                console.log(`  Summary: ${err.message}`)
+              }
+              console.log()
+            }
+
+            console.log(`=== Done: ${totalFeedback} feedback added, ${totalErrors} errors ===')
+          }
+
+          main().catch(e => { console.error('Fatal:', e.message); process.exit(1) })
+          SCRIPT
