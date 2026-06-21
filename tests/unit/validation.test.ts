@@ -106,7 +106,7 @@ describe('ShareCreateSchema', () => {
 
 describe('AddFeedbackSchema', () => {
   const validFeedback = {
-    artifact_id: '00000000-0000-0000-0000-000000000001',
+    artifact_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
     content: 'This is a great artifact!',
   }
 
