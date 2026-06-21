@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { after } from 'next/server'
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { AddFeedbackSchema } from '@/lib/validation'
+import { summarizeFeedback } from '@/lib/ai/claude'
 
 export async function POST(request: Request) {
   let body: unknown
@@ -57,6 +59,8 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: 'Failed to save feedback', code: 'DB_ERROR' }, { status: 500 })
   }
+
+  after(async () => { await summarizeFeedback(parsed.data.artifact_id) })
 
   return NextResponse.json({ feedback: data }, { status: 201 })
 }
