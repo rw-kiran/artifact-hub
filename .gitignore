@@ -20,6 +20,7 @@ coverage/
 playwright-report/
 test-results/
 .playwright/
+tests/integration/.auth/
 
 # TypeScript
 *.tsbuildinfo
