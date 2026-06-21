@@ -12,7 +12,7 @@ vi.mock('@/lib/db/supabase')
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { POST } from '@/app/api/feedback/route'
 
-const VALID_UUID = '00000000-0000-0000-0000-000000000001'
+const VALID_UUID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const OWNER_ID = 'user-owner'
 const OTHER_ID = 'user-other'
 
