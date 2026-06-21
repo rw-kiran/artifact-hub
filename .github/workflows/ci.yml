@@ -37,8 +37,8 @@ jobs:
       LANGFUSE_HOST: https://us.cloud.langfuse.com
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       MCP_API_KEY: ci-test-key
-      TEST_USER_EMAIL: ${{ secrets.CI_TEST_USER_EMAIL }}
-      TEST_USER_PASSWORD: ${{ secrets.CI_TEST_USER_PASSWORD }}
+      TEST_USER_EMAIL: ci@artifact-hub.local
+      TEST_USER_PASSWORD: CiTestPass123!
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
