@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mcp_key:
-        description: 'MCP API key'
+        description: 'MCP API key (ahub_...)'
         required: true
         type: string
+      summarize_only:
+        description: 'Skip feedback insertion and only generate AI summaries'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   seed:
@@ -23,4 +28,4 @@ jobs:
       - name: Seed feedback via MCP
         env:
           MCP_KEY: ${{ inputs.mcp_key }}
-        run: node scripts/seed-feedback.mjs
+        run: node scripts/seed-feedback.mjs ${{ inputs.summarize_only == 'true' && '--summarize-only' || '' }}
