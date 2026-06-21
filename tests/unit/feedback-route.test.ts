@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.mock('next/server', () => ({ after: vi.fn(), NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } }))
+vi.mock('@/lib/ai/claude', () => ({ summarizeFeedback: vi.fn().mockResolvedValue(null) }))
+
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({ getAll: () => [], set: vi.fn() }),
 }))

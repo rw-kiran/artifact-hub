@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.mock('next/server', () => ({ after: vi.fn() }))
+vi.mock('@/lib/ai/claude', () => ({ generateMetadata: vi.fn().mockResolvedValue({ title: 'T', description: '', tags: [] }) }))
+vi.mock('@/lib/ai/ingest', () => ({ ingestArtifact: vi.fn().mockResolvedValue(undefined) }))
+
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({ getAll: () => [], set: vi.fn() }),
 }))
