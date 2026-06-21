@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { ShareCreateSchema } from '@/lib/validation'
+import { z } from 'zod'
 
 export async function POST(request: Request) {
   const cookieStore = await cookies()
@@ -110,7 +111,7 @@ export async function DELETE(request: Request) {
   if (!token_id) {
     return Response.json({ error: 'token_id required', code: 'VALIDATION_ERROR' }, { status: 400 })
   }
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token_id)) {
+  if (!z.string().uuid().safeParse(token_id).success) {
     return Response.json({ error: 'Invalid token_id', code: 'VALIDATION_ERROR' }, { status: 400 })
   }
 

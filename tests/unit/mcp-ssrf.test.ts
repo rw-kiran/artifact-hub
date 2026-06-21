@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { isPrivateUrl } from '@/lib/ssrf'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { isPrivateUrl, safeFetch } from '@/lib/ssrf'
 
 describe('isPrivateUrl', () => {
   it('blocks localhost', () => {
@@ -60,5 +60,40 @@ describe('isPrivateUrl', () => {
 
   it('allows public IPs outside private ranges', () => {
     expect(isPrivateUrl('https://8.8.8.8/resource')).toBe(false)
+  })
+
+  it('blocks non-HTTP schemes', () => {
+    expect(isPrivateUrl('file:///etc/passwd')).toBe(true)
+    expect(isPrivateUrl('ftp://internal.host/data')).toBe(true)
+  })
+})
+
+describe('safeFetch', () => {
+  beforeEach(() => { vi.restoreAllMocks() })
+
+  it('blocks redirect to private IP', async () => {
+    vi.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(null, {
+        status: 301,
+        headers: { location: 'http://169.254.169.254/latest/meta-data/' },
+      }))
+
+    await expect(safeFetch('https://example.com/redirect')).rejects.toThrow(/Blocked/)
+  })
+
+  it('returns response for a clean URL without redirects', async () => {
+    const ok = new Response('ok', { status: 200 })
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(ok)
+
+    const res = await safeFetch('https://example.com/file.pdf')
+    expect(res.status).toBe(200)
+  })
+
+  it('throws after too many redirects', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(null, { status: 302, headers: { location: 'https://example.com/loop' } })
+    )
+
+    await expect(safeFetch('https://example.com/loop')).rejects.toThrow(/Too many redirects/)
   })
 })

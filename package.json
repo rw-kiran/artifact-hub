@@ -24,7 +24,6 @@
     "@vercel/speed-insights": "^1.0.4",
     "fastmcp": "^4.3.0",
     "langfuse": "^3.0.0",
-    "llamaindex": "^0.12.1",
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

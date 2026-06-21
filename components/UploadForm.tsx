@@ -35,10 +35,13 @@ export function UploadForm() {
       return
     }
     setStep('uploading')
-    const formData = new FormData()
-    formData.set('file', file)
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      // Send file as raw body — server streams it directly to Vercel Blob without buffering.
+      const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+        method: 'POST',
+        headers: { 'content-type': file.type },
+        body: file,
+      })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? 'Upload failed')

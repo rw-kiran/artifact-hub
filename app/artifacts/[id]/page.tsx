@@ -2,6 +2,7 @@ import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { ShareModal } from '@/components/ShareModal'
 import { FeedbackPanel } from '@/components/FeedbackPanel'
+import { ReindexButton } from '@/components/ReindexButton'
 import { notFound } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
@@ -87,6 +88,9 @@ export default async function ArtifactDetailPage({
       <p className="text-sm text-gray-400 mb-6 flex items-center gap-2 flex-wrap">
         <span>by {artifact.creator_name ?? 'Anonymous'} &middot; {new Date(artifact.created_at).toLocaleDateString()}</span>
         <IndexStatusBadge status={artifact.index_status} />
+        {isOwner && artifact.index_status === 'failed' && (
+          <ReindexButton artifactId={artifact.id} />
+        )}
       </p>
       <ArtifactViewer artifact={artifact} />
       {artifact.feedback_summary && (

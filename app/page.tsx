@@ -1,10 +1,18 @@
 import { cookies } from 'next/headers'
+import { unstable_cache } from 'next/cache'
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { hybridSearch } from '@/lib/ai/search'
 import { ArtifactCard } from '@/components/ArtifactCard'
 import { SearchBar } from '@/components/SearchBar'
 import Link from 'next/link'
 import type { Artifact, ArtifactType } from '@/lib/types'
+
+// Cache by (query, type) for 60s — avoids Gemini embed + DB RPC + Claude rerank on every SSR
+const cachedHybridSearch = unstable_cache(
+  (q: string, type?: ArtifactType) => hybridSearch(q, { type, limit: 20 }),
+  ['hybrid-search'],
+  { revalidate: 60 },
+)
 
 const TYPE_TABS = [
   { label: 'All', value: '' },
@@ -49,9 +57,10 @@ export default async function GalleryPage({
   }
 
   const from = (page - 1) * 20
+  const GALLERY_COLS = 'id, title, description, tags, type, blob_url, creator_name, created_at, visibility, index_status'
   let query = supabase
     .from('artifacts')
-    .select('*')
+    .select(GALLERY_COLS)
     .order('created_at', { ascending: false })
     .range(from, from + 19)
 
@@ -73,7 +82,7 @@ export default async function GalleryPage({
 
   if (q && !isMine) {
     try {
-      artifacts = await hybridSearch(q, { type, limit: 20 })
+      artifacts = await cachedHybridSearch(q, type)
     } catch (err) {
       console.error(JSON.stringify({ event: 'hybrid_search_error', error: String(err) }))
       artifacts = []

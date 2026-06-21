@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { put } from '@vercel/blob'
 import { createServerSupabaseClient } from '@/lib/db/supabase'
 import { ALLOWED_MIME_TYPES, isAllowedMimeType } from '@/lib/validation'
-import { isPrivateUrl } from '@/lib/ssrf'
+import { safeFetch } from '@/lib/ssrf'
 import { isFkViolation, assertUuid } from '@/lib/mcp/utils'
 import { hybridSearch } from '@/lib/ai/search'
 import type { ArtifactType } from '@/lib/types'
@@ -32,13 +32,16 @@ mcpServer.addTool({
     visibility: z.enum(['public', 'private']).default('public'),
   }),
   execute: async ({ url, title, description, tags, visibility }) => {
-    if (isPrivateUrl(url)) {
-      throw new Error(`Cannot publish from private or internal URLs. Provide a public URL.`)
+    // safeFetch checks every hop in the redirect chain against isPrivateUrl,
+    // blocking redirect-based SSRF (e.g. public URL → 169.254.169.254).
+    let response: Response
+    try {
+      response = await safeFetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ArtifactHub/1.0)' },
+      })
+    } catch (err) {
+      throw new Error(`Cannot fetch URL: ${err instanceof Error ? err.message : String(err)}`)
     }
-
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ArtifactHub/1.0)' },
-    })
     if (!response.ok) throw new Error(`Failed to fetch URL: HTTP ${response.status}. The server rejected the request — try a direct CDN URL instead.`)
 
     const contentType = (response.headers.get('content-type') ?? '').split(';')[0].trim()

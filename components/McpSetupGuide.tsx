@@ -7,31 +7,29 @@ type Tab = 'claude' | 'cursor'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://your-app.vercel.app'
 
-function snippet() {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        'artifact-hub': {
-          command: 'npx',
-          args: [
-            'mcp-remote',
-            `${APP_URL}/api/mcp`,
-            '--header',
-            'Authorization: Bearer YOUR_API_KEY',
-          ],
-        },
+const snippet = JSON.stringify(
+  {
+    mcpServers: {
+      'artifact-hub': {
+        command: 'npx',
+        args: [
+          'mcp-remote',
+          `${APP_URL}/api/mcp`,
+          '--header',
+          'Authorization: Bearer YOUR_API_KEY',
+        ],
       },
     },
-    null,
-    2,
-  )
-}
+  },
+  null,
+  2,
+)
 
 export function McpSetupGuide() {
   const [tab, setTab] = useState<Tab>('claude')
   const [copied, setCopied] = useState(false)
 
-  const code = snippet()
+  const code = snippet
 
   async function copy() {
     await navigator.clipboard.writeText(code).catch(() => {})

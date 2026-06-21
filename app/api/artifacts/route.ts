@@ -2,7 +2,8 @@ import { cookies } from 'next/headers'
 import { after } from 'next/server'
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { CreateArtifactSchema } from '@/lib/validation'
-import { generateMetadata } from '@/lib/ai/claude'
+import { generateMetadataFromText } from '@/lib/ai/claude'
+import { extractContent } from '@/lib/ai/extract'
 import { ingestArtifact } from '@/lib/ai/ingest'
 
 export async function GET(request: Request) {
@@ -15,9 +16,10 @@ export async function GET(request: Request) {
   const supabase = createServerSupabaseClient()
   const from = (page - 1) * 20
 
+  const GALLERY_COLS = 'id, title, description, tags, type, blob_url, creator_name, created_at, visibility, index_status'
   let query = supabase
     .from('artifacts')
-    .select('*')
+    .select(GALLERY_COLS)
     .eq('visibility', 'public')
     .order('created_at', { ascending: false })
     .range(from, from + 19)
@@ -77,13 +79,14 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Failed to create artifact', code: 'DB_ERROR' }, { status: 500 })
   }
 
-  // Fire-and-forget after response: generate AI metadata + RAG ingest
+  // Fire-and-forget after response: extract once, then metadata + RAG ingest in parallel
   after(async () => {
+    const text = await extractContent(data.blob_url, data.type as 'html' | 'image' | 'pdf').catch(() => '')
     await Promise.allSettled([
-      generateMetadata(data.blob_url, data.type)
+      generateMetadataFromText(text, data.type)
         .then(meta => createServerSupabaseClient().from('artifacts').update(meta).eq('id', data.id))
         .catch(err => console.error(JSON.stringify({ event: 'metadata_error', artifactId: data.id, error: String(err) }))),
-      ingestArtifact(data.id, data.blob_url, data.type),
+      ingestArtifact(data.id, data.blob_url, data.type as 'html' | 'image' | 'pdf', text),
     ])
   })
 

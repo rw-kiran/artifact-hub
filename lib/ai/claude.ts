@@ -25,15 +25,13 @@ const MetadataSchema = z.object({
   tags: z.array(z.string().max(50)).max(10),
 })
 
-export async function generateMetadata(
-  blobUrl: string,
+export async function generateMetadataFromText(
+  text: string,
   type: string,
 ): Promise<{ title: string; description: string; tags: string[] }> {
-  const { extractContent } = await import('./extract')
   const trace = langfuse?.trace({ name: 'generate-metadata', input: { type } })
   const generation = trace?.generation({ name: 'claude-metadata', model: 'claude-sonnet-4-6' })
 
-  const text = await extractContent(blobUrl, type as 'html' | 'image' | 'pdf')
   const prompt = `You are analyzing an artifact to generate metadata. Here is its content:\n\n${text.slice(0, 6000)}\n\nReturn a JSON object with:\n- title: a concise, descriptive title (max 100 chars)\n- description: a 1-2 sentence description suitable for a gallery (max 300 chars)\n- tags: an array of 3-7 relevant lowercase single-word tags\n\nReturn ONLY the JSON object, no markdown.`
 
   const msg = await anthropic.messages.create({
@@ -44,7 +42,7 @@ export async function generateMetadata(
 
   const raw = msg.content[0]?.type === 'text' ? msg.content[0].text : ''
   generation?.end({ output: raw })
-  await langfuse?.flushAsync()
+  langfuse?.flushAsync()
 
   try {
     const parsed = MetadataSchema.parse(JSON.parse(raw.replace(/^```(?:json)?\n?|```$/g, '').trim()))
@@ -52,6 +50,16 @@ export async function generateMetadata(
   } catch {
     return { title: 'Untitled', description: '', tags: [] }
   }
+}
+
+// ponytail: thin wrapper for callers that haven't pre-extracted text
+export async function generateMetadata(
+  blobUrl: string,
+  type: string,
+): Promise<{ title: string; description: string; tags: string[] }> {
+  const { extractContent } = await import('./extract')
+  const text = await extractContent(blobUrl, type as 'html' | 'image' | 'pdf')
+  return generateMetadataFromText(text, type)
 }
 
 export async function summarizeFeedback(artifactId: string): Promise<string | null> {
@@ -90,6 +98,6 @@ export async function summarizeFeedback(artifactId: string): Promise<string | nu
     await supabase.from('artifacts').update({ feedback_summary: summary }).eq('id', artifactId)
   }
 
-  await langfuse?.flushAsync()
+  langfuse?.flushAsync()
   return summary
 }
