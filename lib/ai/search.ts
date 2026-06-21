@@ -137,6 +137,6 @@ export async function hybridSearch(
     trace?.update({ output: { count: result.length } })
     return result
   } finally {
-    await langfuse?.flushAsync()
+    langfuse?.flushAsync()
   }
 }

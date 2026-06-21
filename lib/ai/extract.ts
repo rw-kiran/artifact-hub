@@ -17,7 +17,7 @@ export async function extractContent(blobUrl: string, type: ArtifactType): Promi
     console.error(JSON.stringify({ event: 'extract_error', type, error: String(err) }))
     return ''
   } finally {
-    await langfuse?.flushAsync()
+    langfuse?.flushAsync()
   }
 }
 

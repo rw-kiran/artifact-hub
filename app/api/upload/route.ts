@@ -30,6 +30,10 @@ export async function POST(request: Request) {
 
   try {
     const pathname = `artifacts/${crypto.randomUUID()}/${file.name}`
+    // ponytail: Vercel Blob free tier only supports public access. Private-visibility
+    // artifacts are hidden at the app layer (RLS + auth) but the CDN URL is guessable
+    // if leaked. Upgrade to protected blobs (paid Vercel plan) or proxy reads through
+    // /api/artifacts/[id]/content with auth checks to close this gap.
     const blob = await put(pathname, file, { access: 'public', contentType: file.type })
     return Response.json({ url: blob.url, pathname: blob.pathname, contentType: file.type })
   } catch (e) {

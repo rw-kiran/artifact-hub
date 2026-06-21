@@ -11,6 +11,7 @@ export async function ingestArtifact(
   artifactId: string,
   blobUrl: string,
   type: ArtifactType,
+  preExtractedText?: string,
 ): Promise<void> {
   const trace = langfuse?.trace({ name: 'ingest-artifact', input: { artifactId, type } })
   // Outside try so catch can update status even when setup fails
@@ -19,9 +20,9 @@ export async function ingestArtifact(
     // Idempotent: clear existing chunks before re-ingesting
     await supabase.from('artifact_chunks').delete().eq('artifact_id', artifactId)
 
-    // All types: extract text first (Claude vision for images/PDF, HTML strip for html)
-    // then chunk and embed uniformly — no multimodal embedding path needed
-    const text = await extractContent(blobUrl, type)
+    // Accept pre-extracted text to avoid a duplicate extractContent call when
+    // the caller (artifacts/route.ts after()) already ran extraction for metadata.
+    const text = preExtractedText ?? await extractContent(blobUrl, type)
     if (!text.trim()) {
       await supabase.from('artifacts').update({ index_status: 'failed' }).eq('id', artifactId)
       return
@@ -58,6 +59,6 @@ export async function ingestArtifact(
       await supabase.from('artifacts').update({ index_status: 'failed' }).eq('id', artifactId)
     } catch { /* best-effort */ }
   } finally {
-    await langfuse?.flushAsync()
+    langfuse?.flushAsync()
   }
 }
