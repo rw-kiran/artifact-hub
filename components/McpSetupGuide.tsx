@@ -80,7 +80,7 @@ export function McpSetupGuide() {
       {tab === 'cursor' && (
         <div className="space-y-3 text-sm text-gray-700">
           <p>
-            Open <code className="bg-gray-100 px-1 rounded text-xs">~/.cursor/mcp.json</code> (create it if it doesn't exist) and add:
+            Open <code className="bg-gray-100 px-1 rounded text-xs">~/.cursor/mcp.json</code> (create it if it doesn&apos;t exist) and add:
           </p>
           <div className="relative">
             <pre className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto">{code}</pre>

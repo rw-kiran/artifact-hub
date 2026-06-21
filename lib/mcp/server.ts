@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from '@/lib/db/supabase'
 import { ALLOWED_MIME_TYPES, isAllowedMimeType } from '@/lib/validation'
 import { isPrivateUrl } from '@/lib/ssrf'
 import { isFkViolation, assertUuid } from '@/lib/mcp/utils'
+import { hybridSearch } from '@/lib/ai/search'
 import type { ArtifactType } from '@/lib/types'
 
 export const mcpServer = new EdgeFastMCP({
@@ -162,30 +163,18 @@ mcpServer.addTool({
 
 mcpServer.addTool({
   name: 'search_artifacts',
-  description: 'Search public artifacts by keyword. Matches against title and description.',
+  description: 'Search public artifacts using hybrid semantic + keyword search. Understands natural language queries and content meaning, not just title/description keywords.',
   parameters: z.object({
-    query: z.string().min(1).describe('Search terms'),
+    query: z.string().min(1).describe('Natural language search query'),
     type: z.enum(['html', 'image', 'pdf']).optional(),
     limit: z.number().int().min(1).max(50).default(10),
   }),
-  // ponytail: keyword ilike for Phase 4; Phase 5 replaces with Claude NL parse → structured SQL
   execute: async ({ query, type, limit }) => {
-    const supabase = createServerSupabaseClient()
-    const escaped = query.replace(/[%_]/g, '\\$&')
-    let q = supabase
-      .from('artifacts')
-      .select('id, title, type, tags, description, created_at')
-      .eq('visibility', 'public')
-      .or(`title.ilike.%${escaped}%,description.ilike.%${escaped}%`)
-      .order('created_at', { ascending: false })
-      .limit(limit ?? 10)
-
-    if (type) q = q.eq('type', type)
-
-    const { data, error } = await q
-    if (error) throw new Error(`Search failed: ${error.message}`)
-    if (!data?.length) return `No artifacts found for "${query}".`
-    return JSON.stringify(data)
+    const results = await hybridSearch(query, { type: type as ArtifactType | undefined, limit })
+    if (!results.length) return `No artifacts found for "${query}".`
+    return JSON.stringify(results.map(a => ({
+      id: a.id, title: a.title, type: a.type, tags: a.tags, description: a.description, created_at: a.created_at,
+    })))
   },
 })
 

@@ -1,6 +1,9 @@
 import { cookies } from 'next/headers'
+import { after } from 'next/server'
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
 import { CreateArtifactSchema } from '@/lib/validation'
+import { generateMetadata } from '@/lib/ai/claude'
+import { ingestArtifact } from '@/lib/ai/ingest'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -73,6 +76,16 @@ export async function POST(request: Request) {
     console.error(JSON.stringify({ event: 'artifact_create_error', error: error.message }))
     return Response.json({ error: 'Failed to create artifact', code: 'DB_ERROR' }, { status: 500 })
   }
+
+  // Fire-and-forget after response: generate AI metadata + RAG ingest
+  after(async () => {
+    await Promise.allSettled([
+      generateMetadata(data.blob_url, data.type)
+        .then(meta => createServerSupabaseClient().from('artifacts').update(meta).eq('id', data.id))
+        .catch(err => console.error(JSON.stringify({ event: 'metadata_error', artifactId: data.id, error: String(err) }))),
+      ingestArtifact(data.id, data.blob_url, data.type),
+    ])
+  })
 
   return Response.json({ artifact: data }, { status: 201 })
 }
