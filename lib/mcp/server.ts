@@ -6,6 +6,7 @@ import { ALLOWED_MIME_TYPES, isAllowedMimeType } from '@/lib/validation'
 import { safeFetch } from '@/lib/ssrf'
 import { isFkViolation, assertUuid } from '@/lib/mcp/utils'
 import { hybridSearch } from '@/lib/ai/search'
+import { summarizeFeedback } from '@/lib/ai/claude'
 import type { ArtifactType } from '@/lib/types'
 
 export const mcpServer = new EdgeFastMCP({
@@ -280,7 +281,7 @@ mcpServer.addTool({
 
 mcpServer.addTool({
   name: 'summarize_feedback',
-  description: 'Get the AI-generated summary of feedback for an artifact. Returns existing summary or a prompt to add more comments.',
+  description: 'Get the AI-generated summary of feedback for an artifact. Generates one if it does not exist yet.',
   parameters: z.object({
     artifact_id: z.string().describe('Artifact ID'),
   }),
@@ -296,9 +297,12 @@ mcpServer.addTool({
       .single()
 
     if (error || !data) throw new Error(`Artifact not found. Call list_artifacts() to see available IDs.`)
-    // ponytail: Phase 5 calls summarizeFeedback() from lib/ai/claude.ts when feedback_summary is null
     if (!data.feedback_summary) {
-      return `No summary yet for "${data.title}". Add 3 or more comments via add_feedback() to generate one.`
+      const generated = await summarizeFeedback(artifact_id)
+      if (!generated) {
+        return `No summary yet for "${data.title}". Add at least 2 comments via add_feedback() to generate one.`
+      }
+      return generated
     }
     return data.feedback_summary
   },
