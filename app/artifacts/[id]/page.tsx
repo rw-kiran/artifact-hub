@@ -7,6 +7,22 @@ import { cookies } from 'next/headers'
 import Link from 'next/link'
 import type { Artifact, Feedback } from '@/lib/types'
 
+const INDEX_STATUS_CONFIG = {
+  indexed: { label: 'AI Ready',     dot: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-50',  tip: 'Content indexed — appears in AI search' },
+  failed:  { label: 'AI Failed',    dot: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50',  tip: 'Indexing failed — may not appear in AI search' },
+  pending: { label: 'AI Indexing…', dot: 'bg-gray-400',  text: 'text-gray-500',  bg: 'bg-gray-100', tip: 'Indexing in progress' },
+}
+
+function IndexStatusBadge({ status }: { status: Artifact['index_status'] }) {
+  const c = INDEX_STATUS_CONFIG[status] ?? INDEX_STATUS_CONFIG.pending
+  return (
+    <span title={c.tip} className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+      {c.label}
+    </span>
+  )
+}
+
 export default async function ArtifactDetailPage({
   params,
 }: {
@@ -68,11 +84,17 @@ export default async function ArtifactDetailPage({
           ))}
         </div>
       )}
-      <p className="text-sm text-gray-400 mb-6">
-        by {artifact.creator_name ?? 'Anonymous'} &middot;{' '}
-        {new Date(artifact.created_at).toLocaleDateString()}
+      <p className="text-sm text-gray-400 mb-6 flex items-center gap-2 flex-wrap">
+        <span>by {artifact.creator_name ?? 'Anonymous'} &middot; {new Date(artifact.created_at).toLocaleDateString()}</span>
+        <IndexStatusBadge status={artifact.index_status} />
       </p>
       <ArtifactViewer artifact={artifact} />
+      {artifact.feedback_summary && (
+        <div className="my-6 p-4 bg-gray-50 border border-gray-200 rounded-md">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">AI Summary</p>
+          <p className="text-sm text-gray-600 italic">{artifact.feedback_summary}</p>
+        </div>
+      )}
       <FeedbackPanel
         initialFeedback={feedback}
         artifactId={artifact.id}

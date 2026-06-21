@@ -13,9 +13,12 @@ export interface Artifact {
   creator_name: string | null
   creator_email: string | null
   visibility: Visibility
+  feedback_summary: string | null
+  index_status: 'pending' | 'indexed' | 'failed'
   created_at: string
   updated_at: string
 }
+
 
 export interface Feedback {
   id: string
@@ -37,7 +40,6 @@ export interface ShareToken {
 
 export interface ArtifactWithFeedback extends Artifact {
   feedback: Feedback[]
-  feedback_summary: string | null
 }
 
 // API response shapes

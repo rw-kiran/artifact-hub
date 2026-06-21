@@ -2,6 +2,17 @@ import Link from 'next/link'
 import Image from 'next/image'
 import type { Artifact } from '@/lib/types'
 
+const INDEX_DOT: Record<Artifact['index_status'], { color: string; tip: string }> = {
+  indexed: { color: 'bg-green-500', tip: 'AI Ready — indexed for semantic search' },
+  failed:  { color: 'bg-amber-400', tip: 'AI indexing failed' },
+  pending: { color: 'bg-gray-300',  tip: 'AI indexing in progress…' },
+}
+
+function IndexDot({ status }: { status: Artifact['index_status'] }) {
+  const d = INDEX_DOT[status] ?? INDEX_DOT.pending
+  return <span title={d.tip} className={`w-2 h-2 rounded-full flex-shrink-0 ${d.color}`} />
+}
+
 const TYPE_COLORS: Record<Artifact['type'], string> = {
   html: 'bg-blue-100 text-blue-700',
   image: 'bg-green-100 text-green-700',
@@ -57,8 +68,9 @@ export function ArtifactCard({ artifact }: { artifact: Artifact }) {
             ))}
           </div>
         )}
-        <div className="mt-3 text-xs text-gray-400">
-          {artifact.creator_name ?? 'Anonymous'} · {relativeDate(artifact.created_at)}
+        <div className="mt-3 text-xs text-gray-400 flex items-center justify-between">
+          <span>{artifact.creator_name ?? 'Anonymous'} · {relativeDate(artifact.created_at)}</span>
+          <IndexDot status={artifact.index_status} />
         </div>
       </div>
     </Link>

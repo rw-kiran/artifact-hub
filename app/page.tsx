@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createAuthClient } from '@/lib/db/supabase'
+import { hybridSearch } from '@/lib/ai/search'
 import { ArtifactCard } from '@/components/ArtifactCard'
 import { SearchBar } from '@/components/SearchBar'
 import Link from 'next/link'
@@ -66,15 +67,29 @@ export default async function GalleryPage({
     query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`)
   }
 
-  const { data: artifacts, error: dbError } = await Promise.race([
-    query,
-    new Promise<{ data: null; error: Error }>((resolve) =>
-      setTimeout(() => resolve({ data: null, error: new Error('DB timeout') }), 5000)
-    ),
-  ])
+  // For non-owner searches use hybrid RAG search; for owner's own uploads keep direct query
+  let artifacts: Artifact[] | null = null
+  let dbError: { message: string } | null = null
 
-  if (dbError) {
-    console.error(JSON.stringify({ event: 'gallery_query_error', error: dbError.message }))
+  if (q && !isMine) {
+    try {
+      artifacts = await hybridSearch(q, { type, limit: 20 })
+    } catch (err) {
+      console.error(JSON.stringify({ event: 'hybrid_search_error', error: String(err) }))
+      artifacts = []
+    }
+  } else {
+    const result = await Promise.race([
+      query,
+      new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('DB timeout') }), 5000)
+      ),
+    ])
+    artifacts = (result.data as Artifact[] | null)
+    dbError = result.error as { message: string } | null
+    if (dbError) {
+      console.error(JSON.stringify({ event: 'gallery_query_error', error: dbError.message }))
+    }
   }
 
   return (
@@ -126,7 +141,7 @@ export default async function GalleryPage({
           </div>
         )}
 
-        {artifacts && artifacts.length === 20 && (
+        {artifacts && artifacts.length === 20 && !(q && !isMine) && (
           <div className="flex justify-center gap-4">
             {page > 1 && (
               <Link
