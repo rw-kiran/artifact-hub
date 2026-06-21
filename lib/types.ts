@@ -38,10 +38,6 @@ export interface ShareToken {
   created_at: string
 }
 
-export interface ArtifactWithFeedback extends Artifact {
-  feedback: Feedback[]
-}
-
 // API response shapes
 export interface ApiError {
   error: string
@@ -57,31 +53,3 @@ export interface McpApiKey {
   last_used_at: string | null
 }
 
-// MCP tool input shapes (validated by Zod at the boundary)
-export interface PublishArtifactInput {
-  url: string
-  type: ArtifactType
-  title?: string
-  description?: string
-  tags?: string[]
-  visibility?: Visibility
-}
-
-export interface SearchArtifactsInput {
-  query: string
-  type?: ArtifactType
-  limit?: number
-}
-
-export interface AddFeedbackInput {
-  artifact_id: string
-  author_email: string
-  author_name?: string
-  content: string
-  rating?: number
-}
-
-export interface ShareArtifactInput {
-  artifact_id: string
-  expires_in_hours?: number
-}
