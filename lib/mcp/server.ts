@@ -2,6 +2,7 @@ import { EdgeFastMCP } from 'fastmcp/edge'
 import { z } from 'zod'
 import { put } from '@vercel/blob'
 import { createServerSupabaseClient } from '@/lib/db/supabase'
+import { mcpContext } from '@/lib/mcp/context'
 import { ALLOWED_MIME_TYPES, isAllowedMimeType } from '@/lib/validation'
 import { safeFetch } from '@/lib/ssrf'
 import { isFkViolation, assertUuid } from '@/lib/mcp/utils'
@@ -69,7 +70,7 @@ mcpServer.addTool({
         description: description ?? '',
         tags: tags ?? [],
         visibility,
-        created_by: null,
+        created_by: mcpContext.getStore()?.userId ?? null,
       })
       .select()
       .single()
