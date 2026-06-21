@@ -54,6 +54,10 @@ export default async function ArtifactDetailPage({
 
   const isOwner = user?.id === artifact.created_by
 
+  const htmlContent = artifact.type === 'html'
+    ? await fetch(artifact.blob_url).then(r => r.text()).catch(() => undefined)
+    : undefined
+
   // ponytail: service role intentionally bypasses RLS — visitors should see feedback on public artifacts
   const { data: feedbackData } = await supabase
     .from('feedback')
@@ -92,7 +96,7 @@ export default async function ArtifactDetailPage({
           <ReindexButton artifactId={artifact.id} />
         )}
       </p>
-      <ArtifactViewer artifact={artifact} />
+      <ArtifactViewer artifact={artifact} htmlContent={htmlContent} />
       {artifact.feedback_summary && (
         <div className="my-6 p-4 bg-gray-50 border border-gray-200 rounded-md">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">AI Summary</p>

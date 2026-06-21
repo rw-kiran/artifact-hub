@@ -43,6 +43,11 @@ export default async function SharePage({
   if (!artifactData) notFound()
 
   const artifact = artifactData as Artifact
+
+  const htmlContent = artifact.type === 'html'
+    ? await fetch(artifact.blob_url).then(r => r.text()).catch(() => undefined)
+    : undefined
+
   const hoursRemaining = Math.ceil(
     (new Date(tokenRow.expires_at).getTime() - Date.now()) / 3_600_000,
   )
@@ -74,7 +79,7 @@ export default async function SharePage({
         by {artifact.creator_name ?? 'Anonymous'} &middot;{' '}
         {new Date(artifact.created_at).toLocaleDateString()}
       </p>
-      <ArtifactViewer artifact={artifact} />
+      <ArtifactViewer artifact={artifact} htmlContent={htmlContent} />
     </main>
   )
 }
