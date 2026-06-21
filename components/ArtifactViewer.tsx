@@ -1,11 +1,11 @@
 import type { Artifact } from '@/lib/types'
 
-export function ArtifactViewer({ artifact }: { artifact: Artifact }) {
+export function ArtifactViewer({ artifact, htmlContent }: { artifact: Artifact; htmlContent?: string }) {
   if (artifact.type === 'html') {
     return (
       <iframe
-        src={artifact.blob_url}
-        sandbox="allow-scripts allow-same-origin"
+        {...(htmlContent ? { srcdoc: htmlContent } : { src: artifact.blob_url })}
+        sandbox="allow-scripts"
         className="w-full h-[600px] border rounded-lg bg-white"
         title={artifact.title}
       />
