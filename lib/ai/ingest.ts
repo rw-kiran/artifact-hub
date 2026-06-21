@@ -1,11 +1,20 @@
-import { SentenceSplitter, Document } from 'llamaindex'
 import { embedTexts } from './embed'
 import { extractContent } from './extract'
 import { langfuse } from './claude'
 import { createServerSupabaseClient } from '@/lib/db/supabase'
 import type { ArtifactType } from '@/lib/types'
 
-const splitter = new SentenceSplitter({ chunkSize: 512, chunkOverlap: 50 })
+// ponytail: replaces llamaindex SentenceSplitter — same sliding-window semantics, no heavy dep
+function splitWords(text: string, chunkSize = 512, overlap = 50): string[] {
+  const words = text.split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+  const chunks: string[] = []
+  for (let i = 0; i < words.length; i += chunkSize - overlap) {
+    chunks.push(words.slice(i, i + chunkSize).join(' '))
+    if (i + chunkSize >= words.length) break
+  }
+  return chunks
+}
 
 export async function ingestArtifact(
   artifactId: string,
@@ -28,8 +37,7 @@ export async function ingestArtifact(
       return
     }
 
-    const nodes = splitter.getNodesFromDocuments([new Document({ text })])
-    const chunkTexts = nodes.map(n => n.getText()).filter(t => t.trim())
+    const chunkTexts = splitWords(text).filter(t => t.trim())
     if (!chunkTexts.length) {
       await supabase.from('artifacts').update({ index_status: 'failed' }).eq('id', artifactId)
       return

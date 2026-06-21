@@ -16,9 +16,10 @@ export async function GET(request: Request) {
   const supabase = createServerSupabaseClient()
   const from = (page - 1) * 20
 
+  const GALLERY_COLS = 'id, title, description, tags, type, blob_url, creator_name, created_at, visibility, index_status'
   let query = supabase
     .from('artifacts')
-    .select('*')
+    .select(GALLERY_COLS)
     .eq('visibility', 'public')
     .order('created_at', { ascending: false })
     .range(from, from + 19)

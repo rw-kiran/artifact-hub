@@ -38,8 +38,19 @@ async function extractHtml(blobUrl: string): Promise<string> {
     .slice(0, 20000)
 }
 
+const EXTRACT_MAX_BYTES = 20 * 1024 * 1024 // 20 MB — base64 encoding adds ~33%, so 20 MB → ~27 MB in the Claude request
+
+async function fetchBoundedBuffer(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url)
+  const size = Number(res.headers.get('content-length') ?? 0)
+  if (size > EXTRACT_MAX_BYTES) {
+    throw new Error(`File too large for extraction: ${Math.round(size / 1e6)} MB exceeds ${EXTRACT_MAX_BYTES / 1e6} MB limit`)
+  }
+  return res.arrayBuffer()
+}
+
 async function extractPdf(blobUrl: string): Promise<string> {
-  const bytes = await fetch(blobUrl).then(r => r.arrayBuffer())
+  const bytes = await fetchBoundedBuffer(blobUrl)
   const base64 = Buffer.from(bytes).toString('base64')
   // Anthropic SDK types: document block requires explicit cast in mixed-content arrays
   type DocBlock = { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
@@ -58,7 +69,7 @@ async function extractPdf(blobUrl: string): Promise<string> {
 }
 
 async function extractImage(blobUrl: string): Promise<string> {
-  const bytes = await fetch(blobUrl).then(r => r.arrayBuffer())
+  const bytes = await fetchBoundedBuffer(blobUrl)
   const base64 = Buffer.from(bytes).toString('base64')
   // Infer mime from URL; Blob URLs usually carry the extension
   const mimeType = blobUrl.match(/\.png(\?|$)/i) ? 'image/png'
