@@ -33,6 +33,9 @@ export function Nav() {
         Artifact Hub
       </Link>
       <div className="flex items-center gap-4">
+        <Link href="/docs" className="text-sm text-gray-600 hover:text-gray-900">
+          Docs
+        </Link>
         {user ? (
           <>
             <span className="text-sm text-gray-600 hidden sm:block">
